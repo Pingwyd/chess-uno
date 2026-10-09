@@ -143,6 +143,7 @@ export function App() {
             boardMode={boardMode}
             onToggleBoard={toggleBoard}
             onBoardUnavailable={() => setBoardMode('2d')}
+            onTogglePieces={() => setPieceSet((p) => (p === 'arcane' ? 'classic' : 'arcane'))}
             onClose={() => {
               if (urlReplay) { const u = new URL(location.href); u.searchParams.delete('replay'); history.replaceState(null, '', u.toString()); }
               setOnline(replay.back === 'online');

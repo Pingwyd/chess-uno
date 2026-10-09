@@ -11,6 +11,7 @@ import { PlayerZone } from './PlayerZone';
 import { CardBack, CardFace } from './Card';
 import { useGame, type GameSetup, BOT_NAMES, rematchSetup } from './useGame';
 import type { RematchState } from '../net/online';
+import type { SandboxTransport } from '../replay/sandbox';
 import { LocalTransport, type GameTransport } from '../net/transport';
 import { newRecordId, type GameRecord } from '../replay/record';
 import { saveGame } from '../replay/store';
@@ -38,6 +39,14 @@ export interface OnlineBinding {
   onDeclineRematch?: () => void;
 }
 
+/** "Try it yourself" from a reviewed turn: you vs the engine, no clocks, nothing saved. */
+export interface SandboxBinding {
+  transport: SandboxTransport;
+  /** e.g. "From turn 12 · you drew a 2". */
+  subtitle: string;
+  onBack: () => void;
+}
+
 interface Props {
   setup: GameSetup;
   pieceSet: PieceSet;
@@ -48,6 +57,7 @@ interface Props {
   online?: OnlineBinding;
   /** Open the replay / review of the finished game. */
   onReview?: (src: ReplaySource, tab?: 'replay' | 'review') => void;
+  sandbox?: SandboxBinding;
 }
 
 interface Reveal { key: number; kind: CardKind; toHand: boolean; capped: boolean; flip: boolean; hidden: boolean; burned?: boolean }
@@ -66,8 +76,8 @@ export function GameScreen(props: Props) {
   return <Game key={gameKey} {...props} setup={local} gameKey={gameKey} onRematch={() => { setLocal(rematchSetup); setGameKey((k) => k + 1); }} />;
 }
 
-function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, onRematch, online, onReview }: Props & { gameKey: number; onRematch: () => void }) {
-  const { state, now, dispatch, error: localError, transport } = useGame(setup, gameKey, online?.transport);
+function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, onRematch, online, onReview, sandbox }: Props & { gameKey: number; onRematch: () => void }) {
+  const { state, now, dispatch, error: localError, transport } = useGame(setup, gameKey, online?.transport ?? sandbox?.transport);
   const saved = useSaveFinishedGame(state, transport, setup, online);
   const error = online ? online.error : localError;
   const wide = useMediaQuery('(min-width: 1000px) and (min-aspect-ratio: 5/4)');
@@ -76,7 +86,7 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
   const spectator = !!online && you === null;
   const hiddenIds = useMemo(() => new Set(online?.snap.hiddenCardIds ?? []), [online?.snap.hiddenCardIds]);
   // Player 0 sits at the bottom locally (the human vs. the bot); online, you are always at the bottom.
-  const bottom: PlayerId = online ? (you ?? 0) : 0;
+  const bottom: PlayerId = online ? (you ?? 0) : sandbox ? sandbox.transport.human : 0;
   const top: PlayerId = bottom === 0 ? 1 : 0;
   const [showLog, setShowLog] = useState(false);
   const chatOpen = showLog;
@@ -257,7 +267,7 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
   );
 
   return (
-    <div className={`game game-${setup.mode}`} data-testid="game" data-turns={state.history.length}>
+    <div className={`game game-${setup.mode} ${sandbox ? 'game-sandbox' : ''}`} data-testid="game" data-turns={state.history.length}>
       {pass ? (
         <>
           {zone(top, true)}
@@ -267,11 +277,13 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
       ) : (
         <>
           <header className="game-bar">
-            {(!online || spectator || state.phase === 'over') && (
+            {sandbox ? (
+              <button className="icon-btn" onClick={sandbox.onBack} aria-label="Back to review" data-testid="sandbox-back"><Icon name="chevron-left" size={20} /></button>
+            ) : (!online || spectator || state.phase === 'over') && (
               <button className="icon-btn" onClick={online ? online.onLeave : onHome} aria-label={online ? 'Back to lobby' : 'Home'}><Icon name={online ? 'chevron-left' : 'house'} size={20} /></button>
             )}
             <div className="game-bar-title">
-              {online
+              {sandbox ? <span className="sandbox-title"><span>Try it yourself <i>vs {BOT_NAMES[setup.botLevel]}</i></span><small>{sandbox.subtitle}</small></span> : online
                 ? spectator
                   ? <>Watching <span className="mono">{online.snap.code}</span></>
                   : <>Vs {state.players[top].name}{online.snap.rated && <span className="rated-tag">Rated</span>}</>
@@ -279,6 +291,7 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
             </div>
             {online && online.snap.spectators > 0 && <span className="spectators" title="Spectators" aria-label={`${online.snap.spectators} watching`}><Icon name="eye" size={16} /> {online.snap.spectators}</span>}
             {online && !spectator && <ShareWatch code={online.snap.code} />}
+            {sandbox && <SandboxTools sandbox={sandbox} />}
           </header>
           {wide ? (
             <div className="bot-wide">
@@ -316,8 +329,8 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
           onToggleBoard={onToggleBoard}
           pieceSet={pieceSet}
           onTogglePieces={onTogglePieces}
-          onPause={!online && state.players[bottom].kind === 'human' ? () => dispatch({ type: 'pause' }) : undefined}
-          onResign={!spectator && (online ? true : state.players[bottom].kind === 'human') ? () => dispatch({ type: 'resign', player: bottom }) : undefined}
+          onPause={!online && !sandbox && state.players[bottom].kind === 'human' ? () => dispatch({ type: 'pause' }) : undefined}
+          onResign={!spectator && !sandbox && (online ? true : state.players[bottom].kind === 'human') ? () => dispatch({ type: 'resign', player: bottom }) : undefined}
         />
       )}
       {state.paused && state.phase !== 'over' && (
@@ -326,7 +339,8 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
           <PausePanel rotated={false} onResume={() => dispatch({ type: 'resume' })} onHome={onHome} />
         </div>
       )}
-      {state.phase === 'over' && state.result && (
+      {state.phase === 'over' && state.result && sandbox && <SandboxOver state={state} sandbox={sandbox} you={bottom} />}
+      {state.phase === 'over' && state.result && !sandbox && (
         <GameOver state={state} result={state.result} pass={pass} onRematch={onRematch} onHome={onHome} online={online}
           onReview={onReview && (online ? online.snap.you !== null : true) ? async () => { const src = await saved(); if (src) onReview(src, 'review'); } : undefined} />
       )}
@@ -552,6 +566,34 @@ function GameOver({ state, result, pass, onRematch, onHome, online, onReview }: 
     <div className={`overlay gameover-overlay ${pass ? 'two-sided' : ''}`}>
       {pass && panel(1, true)}
       {panel(online ? online.snap.you : 0, false)}
+    </div>
+  );
+}
+
+function SandboxTools({ sandbox }: { sandbox: SandboxBinding }) {
+  const t = sandbox.transport;
+  return (
+    <div className="sandbox-tools" role="toolbar" aria-label="Sandbox">
+      <button className="btn small" onClick={() => t.undo()} disabled={!t.canUndo()} data-testid="sandbox-undo"><Icon name="undo" size={16} /> Undo</button>
+      <button className="btn small" onClick={() => t.reset()} data-testid="sandbox-reset"><Icon name="rotate-ccw" size={16} /> Reset</button>
+    </div>
+  );
+}
+
+function SandboxOver({ state, sandbox, you }: { state: GameState; sandbox: SandboxBinding; you: PlayerId }) {
+  const r = state.result!;
+  const verdict = r.winner === null ? 'Draw.' : r.winner === you ? 'You won this line.' : 'The engine won this line.';
+  return (
+    <div className="overlay gameover-overlay">
+      <div className={`panel gameover ${r.winner === you ? 'won' : r.winner === null ? 'drawn' : 'lost'}`} data-testid="sandbox-over">
+        <div className="go-head"><div><div className="go-verdict">{verdict}</div><h2>{endLine(state, r)}</h2></div></div>
+        <p className="gameover-stats">Practice only: nothing here is saved or rated.</p>
+        <div className="panel-actions">
+          {sandbox.transport.canUndo() && <button className="btn primary" onClick={() => sandbox.transport.undo()}><Icon name="undo" size={18} /> Undo</button>}
+          <button className="btn" onClick={() => sandbox.transport.reset()}><Icon name="rotate-ccw" size={18} /> Reset</button>
+          <button className="btn ghost" onClick={sandbox.onBack}>Back to review</button>
+        </div>
+      </div>
     </div>
   );
 }
