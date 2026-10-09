@@ -6,7 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor, Sparkles } from '@react-three/drei';
-import { BloomEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, ToneMappingEffect, ToneMappingMode, VignetteEffect, type Effect } from 'postprocessing';
+import { BloomEffect, EffectComposer, EffectPass, RenderPass, FXAAEffect, ToneMappingEffect, ToneMappingMode, VignetteEffect, type Effect } from 'postprocessing';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { colorOfPiece, typeOf, type Color } from '../../rules/chess';
 import type { BoardArrow, BoardProps } from '../Board';
@@ -79,7 +79,7 @@ export default function Board3D(props: BoardProps) {
 /**
  * Bloom (only HDR emissives — eyes, gems, glows — cross the threshold) plus a soft vignette.
  * The scene pass is multisampled (MSAA) so edges stay as clean as the plain renderer's; GPUs
- * without multisampled render targets get SMAA instead. Buffers follow the canvas DPR, so a
+ * without multisampled render targets get FXAA instead. Buffers follow the canvas DPR, so a
  * DPR change never leaves a low-res composer being stretched over a sharp canvas.
  */
 function PostFX({ bloom }: { bloom: number }) {
@@ -98,7 +98,7 @@ function PostFX({ bloom }: { bloom: number }) {
       new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }),
       new VignetteEffect({ offset: 0.32, darkness: 0.55 }),
     ];
-    if (samples < 2) effects.push(new SMAAEffect());
+    if (samples < 2) effects.push(new FXAAEffect());
     c.addPass(new EffectPass(camera, ...effects));
     return c;
   }, [gl, scene, camera, bloom]);
