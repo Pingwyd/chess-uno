@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LocalTransport } from '../net/transport';
+import { LocalTransport, type GameTransport } from '../net/transport';
 import { remainingMs, type GameAction, type GameState, type PlayerId } from '../rules/game';
 import type { Color, Move } from '../rules/chess';
 import { askBot } from '../engine/botClient';
 import type { BotLevel } from '../engine/bot';
 
-export type GameMode = 'pass' | 'bot';
+export type GameMode = 'pass' | 'bot' | 'online';
 
 export interface GameSetup {
   mode: GameMode;
@@ -20,18 +20,19 @@ export const BOT_NAMES: Record<BotLevel, string> = { easy: 'Pawn Bot', medium: '
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-export function useGame(setup: GameSetup, gameKey: number) {
-  const transport = useMemo(() => new LocalTransport({
+export function useGame(setup: GameSetup, gameKey: number, external?: GameTransport) {
+  const transport = useMemo<GameTransport>(() => external ?? new LocalTransport({
     seed: setup.seed,
     player0Color: setup.mode === 'bot' ? setup.humanColor : 'w',
     players: setup.mode === 'bot'
       ? [{ name: 'You', kind: 'human' }, { name: BOT_NAMES[setup.botLevel], kind: 'bot' }]
       : [{ name: setup.names?.[0] ?? 'Player 1', kind: 'human' }, { name: setup.names?.[1] ?? 'Player 2', kind: 'human' }],
   }), // eslint-disable-next-line react-hooks/exhaustive-deps
-  [gameKey]);
+  [gameKey, external]);
+  const clock = useCallback(() => (transport.now ? transport.now() : Date.now()), [transport]);
 
   const [state, setState] = useState<GameState>(() => transport.getState());
-  const [now, setNow] = useState(() => Date.now());
+  const [now, setNow] = useState(() => clock());
   const [error, setError] = useState<string | null>(null);
   const stateRef = useRef(state);
 
@@ -56,13 +57,14 @@ export function useGame(setup: GameSetup, gameKey: number) {
   // Clock display + flag detection.
   useEffect(() => {
     const id = setInterval(() => {
-      const t = Date.now();
+      const t = clock();
       setNow(t);
       const s = stateRef.current;
-      if (s.phase !== 'over' && !s.paused && remainingMs(s, s.current as PlayerId, t) <= 0) transport.send({ type: 'tick' });
+      // Online games: the server runs the clocks and decides flag fall.
+      if (!external && s.phase !== 'over' && !s.paused && remainingMs(s, s.current as PlayerId, t) <= 0) transport.send({ type: 'tick' });
     }, 100);
     return () => clearInterval(id);
-  }, [transport]);
+  }, [transport, clock, external]);
 
   // Bot driver.
   const plan = useRef<{ turn: number; moves: Move[] } | null>(null);

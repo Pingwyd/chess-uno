@@ -1,47 +1,88 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { EMOTES } from '../net/protocol';
 import { other, type PromotionPiece } from '../rules/chess';
 import { formatTurn, type GameEvent, type GameResult, type GameState, type PlayerId } from '../rules/game';
 import type { CardKind } from '../rules/cards';
 import { Board, type LastMoveAnim } from './Board';
 import { PlayerZone } from './PlayerZone';
-import { CardFace } from './Card';
+import { CardBack, CardFace } from './Card';
 import { useGame, type GameSetup, BOT_NAMES } from './useGame';
+import type { GameTransport } from '../net/transport';
+import type { ChatMessage, EmoteId, RoomSnapshot } from '../net/protocol';
+import { ChatPanel } from './ChatPanel';
 import { buzz, sfx } from './sound';
 import type { PieceSet } from './pieces';
+
+/** Everything an online game needs from the network layer. */
+export interface OnlineBinding {
+  transport: GameTransport;
+  snap: RoomSnapshot;
+  chat: ChatMessage[];
+  error: string | null;
+  onChat: (text: string) => void;
+  onEmote: (e: EmoteId) => void;
+  /** Back to the online lobby (only offered when the game is over or when spectating). */
+  onLeave: () => void;
+}
 
 interface Props {
   setup: GameSetup;
   pieceSet: PieceSet;
   onTogglePieces: () => void;
   onHome: () => void;
+  online?: OnlineBinding;
 }
 
-interface Reveal { key: number; kind: CardKind; toHand: boolean; capped: boolean; flip: boolean }
+interface Reveal { key: number; kind: CardKind; toHand: boolean; capped: boolean; flip: boolean; hidden: boolean }
 interface Banner { key: number; text: string; sub?: string; tone: 'skip' | 'reverse' | 'check' | 'info' }
 
-export function GameScreen({ setup, pieceSet, onTogglePieces, onHome }: Props) {
+export function GameScreen({ setup, pieceSet, onTogglePieces, onHome, online }: Props) {
   const [gameKey, setGameKey] = useState(0);
+  if (online) {
+    return <Game key={online.snap.gameId} setup={setup} gameKey={0} pieceSet={pieceSet} onTogglePieces={onTogglePieces} onHome={onHome} online={online} onRematch={online.onLeave} />;
+  }
   return <Game key={gameKey} setup={setup} gameKey={gameKey} pieceSet={pieceSet} onTogglePieces={onTogglePieces} onHome={onHome} onRematch={() => setGameKey((k) => k + 1)} />;
 }
 
-function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: Props & { gameKey: number; onRematch: () => void }) {
-  const { state, now, dispatch, error } = useGame(setup, gameKey);
+function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch, online }: Props & { gameKey: number; onRematch: () => void }) {
+  const { state, now, dispatch, error: localError } = useGame(setup, gameKey, online?.transport);
+  const error = online ? online.error : localError;
   const wide = useMediaQuery('(min-width: 1000px) and (min-aspect-ratio: 5/4)');
   const pass = setup.mode === 'pass';
-  // Player 0 always sits at the bottom (the human in vs-bot mode).
-  const bottom: PlayerId = 0;
-  const top: PlayerId = 1;
+  const you: PlayerId | null = online ? online.snap.you : null;
+  const spectator = !!online && you === null;
+  const hiddenIds = useMemo(() => new Set(online?.snap.hiddenCardIds ?? []), [online?.snap.hiddenCardIds]);
+  // Player 0 sits at the bottom locally (the human vs. the bot); online, you are always at the bottom.
+  const bottom: PlayerId = online ? (you ?? 0) : 0;
+  const top: PlayerId = bottom === 0 ? 1 : 0;
+  const [showLog, setShowLog] = useState(false);
+  const chatOpen = showLog;
+  const [seenChat, setSeenChat] = useState(0);
+  const [bubble, setBubble] = useState<ChatMessage | null>(null);
+  const chatLen = online?.chat.length ?? 0;
+  const chatSeen = useRef(chatLen);
+  useEffect(() => {
+    if (!online || chatLen <= chatSeen.current) { chatSeen.current = chatLen; return; }
+    chatSeen.current = chatLen;
+    const last = online.chat[chatLen - 1];
+    if (last.seat === you && you !== null) return;
+    setBubble(last);
+    const t = setTimeout(() => setBubble(null), 3000);
+    return () => clearTimeout(t);
+  }, [chatLen, online, you]);
+  const unread = online ? Math.max(0, online.chat.length - seenChat) : 0;
+  useEffect(() => { if (chatOpen || wide) setSeenChat(online?.chat.length ?? 0); }, [chatOpen, wide, online?.chat.length]);
   const bottomColor = state.colorOf[bottom];
   const [promotion, setPromotion] = useState<{ from: number; to: number } | null>(null);
   const [anim, setAnim] = useState<LastMoveAnim | null>(null);
   const [reveals, setReveals] = useState<Reveal[]>([]);
   const [banner, setBanner] = useState<Banner | null>(null);
-  const [showLog, setShowLog] = useState(false);
   const seen = useRef(0);
   const key = useRef(1);
 
   // Turn new rule events into animations, sounds and haptics.
   useEffect(() => {
+    if (state.events.length < seen.current) seen.current = 0;
     const fresh = state.events.slice(seen.current);
     const firstLoad = seen.current === 0;
     seen.current = state.events.length;
@@ -51,7 +92,7 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
     for (const e of fresh as GameEvent[]) {
       switch (e.type) {
         case 'draw':
-          newReveals.push({ key: key.current++, kind: e.card.kind, toHand: e.toHand, capped: !!e.capped, flip: pass && e.player === top });
+          newReveals.push({ key: key.current++, kind: e.card.kind, toHand: e.toHand, capped: !!e.capped, flip: pass && e.player === top, hidden: hiddenIds.has(e.card.id) });
           sfx.draw();
           break;
         case 'move':
@@ -84,7 +125,7 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
         case 'gameOver': {
           const r = e.result;
           if (r.winner === null) sfx.lose();
-          else if (pass || r.winner === 0) sfx.win();
+          else if (pass || r.winner === (online ? you : 0)) sfx.win();
           else sfx.lose();
           break;
         }
@@ -93,6 +134,7 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
     if (newReveals.length) setReveals((q) => [...q, ...newReveals]);
     if (newBanner) setBanner(newBanner);
     setPromotion(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, pass, top]);
 
   useEffect(() => {
@@ -107,8 +149,8 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
     return () => clearTimeout(t);
   }, [banner]);
 
-  const humanTurn = state.players[state.current].kind === 'human';
-  const interactive = state.phase === 'moving' && humanTurn && !state.paused && !promotion;
+  const humanTurn = online ? state.current === you : state.players[state.current].kind === 'human';
+  const interactive = state.phase === 'moving' && humanTurn && !state.paused && !promotion && !online?.snap.delayed;
 
   const move = (from: number, to: number, promo?: PromotionPiece) =>
     dispatch({ type: 'move', player: state.current, from, to, promotion: promo });
@@ -121,13 +163,16 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
       rotated={rotated}
       compact={compact}
       isBot={state.players[player].kind === 'bot'}
+      remote={online ? player !== you : false}
+      hiddenCardIds={online ? hiddenIds : undefined}
+      badge={online ? <SeatBadge snap={online.snap} seat={player} now={now} /> : undefined}
       pieceSet={pieceSet}
       dispatch={dispatch}
       promotion={promotion && state.current === player ? promotion : null}
       onPromote={(p) => { if (promotion) move(promotion.from, promotion.to, p); setPromotion(null); }}
       onCancelPromotion={() => setPromotion(null)}
-      onPause={state.players[player].kind === 'human' ? () => dispatch({ type: 'pause' }) : undefined}
-      onResign={state.players[player].kind === 'human' ? () => dispatch({ type: 'resign', player }) : undefined}
+      onPause={!online && state.players[player].kind === 'human' ? () => dispatch({ type: 'pause' }) : undefined}
+      onResign={(online ? player === you : state.players[player].kind === 'human') ? () => dispatch({ type: 'resign', player }) : undefined}
     />
   );
 
@@ -145,6 +190,12 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
         onPromotion={(f, t) => setPromotion({ from: f, to: t })}
       />
       {reveals[0] && <CardReveal reveal={reveals[0]} pass={pass} />}
+      {bubble && (
+        <div className={`chat-bubble ${bubble.seat === top ? 'bubble-top' : 'bubble-bottom'}`} key={bubble.id}>
+          <b>{bubble.name}</b> {bubble.emote ? EMOTE_TEXT[bubble.emote] : bubble.text}
+        </div>
+      )}
+      {online?.snap.delayed && <div className="delay-pill">Ranked game · spectators see it one turn behind</div>}
       {banner && <BannerView banner={banner} pass={pass} />}
       {error && <div className="toast">{error}</div>}
     </div>
@@ -161,17 +212,32 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
       ) : (
         <>
           <header className="game-bar">
-            <button className="icon-btn" onClick={onHome} aria-label="Home">⌂</button>
-            <div className="game-bar-title">vs {BOT_NAMES[setup.botLevel]}</div>
+            {(!online || spectator || state.phase === 'over') && (
+              <button className="icon-btn" onClick={online ? online.onLeave : onHome} aria-label={online ? 'Back to lobby' : 'Home'}>{online ? '‹' : '⌂'}</button>
+            )}
+            <div className="game-bar-title">
+              {online
+                ? spectator
+                  ? <>Watching · <span className="mono">{online.snap.code}</span></>
+                  : <>vs {state.players[top].name}{online.snap.rated && <span className="rated-tag">RATED</span>}</>
+                : <>vs {BOT_NAMES[setup.botLevel]}</>}
+            </div>
+            {online && online.snap.spectators > 0 && <span className="spectators" title="Spectators">👁 {online.snap.spectators}</span>}
+            {online && !spectator && <ShareWatch code={online.snap.code} />}
             <button className="icon-btn" onClick={onTogglePieces} title="Toggle piece set">{pieceSet === 'arcane' ? '♞' : '✦'}</button>
-            {!wide && <button className="icon-btn log-toggle" onClick={() => setShowLog((v) => !v)} aria-label="Move list">☰</button>}
+            {!wide && (
+              <button className="icon-btn log-toggle" onClick={() => setShowLog((v) => !v)} aria-label={online ? 'Chat and turns' : 'Move list'} data-testid="side-toggle">
+                {online ? '💬' : '☰'}
+                {online && unread > 0 && !showLog && <span className="unread">{unread}</span>}
+              </button>
+            )}
           </header>
           {wide ? (
             <div className="bot-wide">
               {board}
               <aside className="side-col">
                 {zone(top, false, true)}
-                <MoveLog state={state} />
+                {online ? <SideTabs state={state} online={online} spectator={spectator} /> : <MoveLog state={state} />}
                 <DeckInfo state={state} />
                 {zone(bottom, false)}
               </aside>
@@ -184,7 +250,7 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
               {zone(bottom, false)}
             </div>
             <aside className={`side-panel ${showLog ? 'open' : ''}`}>
-              <MoveLog state={state} />
+              {online ? <SideTabs state={state} online={online} spectator={spectator} /> : <MoveLog state={state} />}
               <DeckInfo state={state} />
             </aside>
           </div>
@@ -198,7 +264,7 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch }: P
         </div>
       )}
       {state.phase === 'over' && state.result && (
-        <GameOver state={state} result={state.result} pass={pass} onRematch={onRematch} onHome={onHome} />
+        <GameOver state={state} result={state.result} pass={pass} onRematch={onRematch} onHome={onHome} online={online} />
       )}
     </div>
   );
@@ -219,10 +285,10 @@ function CardReveal({ reveal, pass }: { reveal: Reveal; pass: boolean }) {
   return (
     <div className={`reveal ${reveal.flip ? 'reveal-flip' : ''} ${reveal.toHand ? 'reveal-hand' : ''} ${pass ? 'reveal-pass' : ''}`} key={reveal.key}>
       <div className="reveal-card">
-        <CardFace kind={reveal.kind} size="xl" />
+        {reveal.hidden ? <CardBack size="xl" /> : <CardFace kind={reveal.kind} size="xl" />}
       </div>
       <div className="reveal-label">
-        {reveal.toHand ? 'Into your hand — draw again' : reveal.capped ? 'Opening turn: counts as 1' : `${reveal.kind} move${reveal.kind === '1' ? '' : 's'}`}
+        {reveal.hidden ? 'Action card — held in hand' : reveal.toHand ? 'Into your hand — draw again' : reveal.capped ? 'Opening turn: counts as 1' : `${reveal.kind} move${reveal.kind === '1' ? '' : 's'}`}
       </div>
     </div>
   );
@@ -270,12 +336,15 @@ const REASON: Record<GameResult['reason'], string> = {
   'timeout-vs-insufficient': 'Time out vs. insufficient material',
 };
 
-function GameOver({ state, result, pass, onRematch, onHome }: { state: GameState; result: GameResult; pass: boolean; onRematch: () => void; onHome: () => void }) {
+function GameOver({ state, result, pass, onRematch, onHome, online }: { state: GameState; result: GameResult; pass: boolean; onRematch: () => void; onHome: () => void; online?: OnlineBinding }) {
+  const info = online?.snap.result;
   const panel = (viewer: PlayerId | null, rotated: boolean) => {
     const draw = result.winner === null;
     const won = !draw && viewer !== null && result.winner === viewer;
     const title = draw ? 'Draw' : viewer === null ? `${state.players[result.winner!].name} wins` : won ? 'Victory!' : 'Defeat';
-    const sub = draw ? REASON[result.reason] : `${state.players[result.winner!].name} won ${REASON[result.reason]}`;
+    const how = info?.note === 'abandoned' ? 'by abandonment' : REASON[result.reason];
+    const sub = draw ? REASON[result.reason] : `${state.players[result.winner!].name} won ${how}`;
+    const delta = info?.ratingChange && viewer !== null ? info.ratingChange[viewer] : null;
     const turns = state.history.filter((t) => !t.skipped).length;
     return (
       <div className={`panel gameover ${rotated ? 'rotated' : ''} ${won ? 'won' : draw ? 'drawn' : 'lost'}`} data-testid="game-over">
@@ -287,8 +356,14 @@ function GameOver({ state, result, pass, onRematch, onHome }: { state: GameState
           <span>{plural(state.history.reduce((n, t) => n + t.moves.length, 0), 'move')}</span>
           <span>{plural(state.history.reduce((n, t) => n + t.played.length, 0), 'card')} played</span>
         </div>
+        {delta !== null && info?.ratingAfter && viewer !== null && (
+          <div className={`rating-change ${delta >= 0 ? 'up' : 'down'}`} data-testid="rating-change">
+            Rating {info.ratingAfter[viewer]} <b>{delta >= 0 ? `▲ +${delta}` : `▼ ${delta}`}</b>
+          </div>
+        )}
+        {info && <div className="seed-note">Deck seed {info.seed} — the shuffle can be verified</div>}
         <div className="panel-actions">
-          <button className="btn primary" onClick={onRematch}>Rematch</button>
+          <button className="btn primary" onClick={onRematch}>{online ? 'New game' : 'Rematch'}</button>
           <button className="btn ghost" onClick={onHome}>Menu</button>
         </div>
       </div>
@@ -297,7 +372,7 @@ function GameOver({ state, result, pass, onRematch, onHome }: { state: GameState
   return (
     <div className={`overlay gameover-overlay ${pass ? 'two-sided' : ''}`}>
       {pass && panel(1, true)}
-      {panel(pass ? 0 : 0, false)}
+      {panel(online ? online.snap.you : 0, false)}
     </div>
   );
 }
@@ -330,6 +405,55 @@ function DeckInfo({ state }: { state: GameState }) {
       <div className="discard-top">
         Discard {top ? <CardFace kind={top.kind} size="xs" /> : <span>—</span>}
       </div>
+    </div>
+  );
+}
+
+const EMOTE_TEXT = EMOTES;
+
+function SeatBadge({ snap, seat, now }: { snap: RoomSnapshot; seat: PlayerId; now: number }) {
+  const info = snap.seats[seat];
+  const away = !info.connected && info.graceUntil;
+  return (
+    <>
+      <span className="rating-tag" title={info.guest ? 'Guest' : 'Rating'}>{info.guest ? 'guest' : info.rating}</span>
+      {away && snap.state.phase !== 'over' && (
+        <span className="away-tag">reconnecting {Math.max(0, Math.ceil((info.graceUntil! - now) / 1000))}s</span>
+      )}
+    </>
+  );
+}
+
+function ShareWatch({ code }: { code: string }) {
+  const [copied, setCopied] = useState(false);
+  const link = `${location.origin}${location.pathname}?watch=${code}`;
+  return (
+    <button
+      className="icon-btn"
+      title="Copy spectator link"
+      aria-label="Copy spectator link"
+      onClick={async () => {
+        try { await navigator.clipboard.writeText(link); } catch { /* clipboard blocked */ }
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? '✓' : '🔗'}
+    </button>
+  );
+}
+
+function SideTabs({ state, online, spectator }: { state: GameState; online: OnlineBinding; spectator: boolean }) {
+  const [tab, setTab] = useState<'chat' | 'turns'>('chat');
+  return (
+    <div className="side-tabs">
+      <div className="seg seg-small">
+        <button className={`seg-btn ${tab === 'chat' ? 'on' : ''}`} onClick={() => setTab('chat')}>Chat</button>
+        <button className={`seg-btn ${tab === 'turns' ? 'on' : ''}`} onClick={() => setTab('turns')}>Turns</button>
+      </div>
+      {tab === 'chat'
+        ? <ChatPanel messages={online.chat} you={online.snap.you} readOnly={spectator} onSend={online.onChat} onEmote={online.onEmote} />
+        : <MoveLog state={state} />}
     </div>
   );
 }
