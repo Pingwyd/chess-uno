@@ -167,8 +167,18 @@ await host.getByTestId('rating-change').waitFor({ timeout: 10000 });
 await wait(600);
 await shot(host, '15-rated-win-rating-change');
 console.log('rating change:', await host.getByTestId('rating-change').textContent());
-await host.getByTestId('game-over').getByRole('button', { name: 'New game' }).click();
+
+// ------------------------------------------------------------ 7. review the online game (server record + server review), then back to the lobby
+await host.getByTestId('review-game').click();
+await host.getByTestId('replay').waitFor({ timeout: 15000 });
+await host.getByTestId('share-replay').waitFor();
+await host.getByTestId('review-summary').waitFor({ timeout: 60000 });
+await wait(600);
+await host.screenshot({ path: `${OUT}review-11-online-review.png` });
+await host.getByTestId('replay-close').click();
 await host.getByTestId('lobby').waitFor();
+await host.getByTestId('my-online-games').waitFor({ timeout: 10000 });
+console.log('lobby recent online games:', await host.getByTestId('my-online-games').locator('.recent-item').count());
 await wait(800);
 await shot(host, '16-lobby-account-leaderboard');
 

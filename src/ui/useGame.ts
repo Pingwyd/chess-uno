@@ -114,5 +114,5 @@ export function useGame(setup: GameSetup, gameKey: number, external?: GameTransp
     }
   }, [state, kick, setup.mode, setup.botLevel, dispatch, transport]);
 
-  return { state, now, dispatch, error };
+  return { state, now, dispatch, error, transport };
 }

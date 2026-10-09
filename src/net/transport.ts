@@ -6,6 +6,7 @@
  *   server (design doc §11.2) and renders the snapshots it receives.
  */
 import { applyAction, createGame, type GameAction, type GameConfig, type GameState } from '../rules/game';
+import { logEntry, recordableConfig, type LoggedAction, type RecordConfig } from '../replay/record';
 
 export interface GameTransport {
   getState(): GameState;
@@ -20,10 +21,16 @@ export class LocalTransport implements GameTransport {
   private state: GameState;
   private listeners = new Set<(s: GameState) => void>();
   private readonly clock: () => number;
+  /** Everything needed to replay this game exactly (see src/replay/record.ts). */
+  readonly config: RecordConfig;
+  readonly startedAt: number;
+  readonly log: LoggedAction[] = [];
 
   constructor(config: GameConfig, clock: () => number = () => Date.now()) {
     this.clock = clock;
-    this.state = createGame(config, clock());
+    this.config = recordableConfig(config);
+    this.startedAt = clock();
+    this.state = createGame(this.config, this.startedAt);
   }
 
   getState() {
@@ -32,8 +39,10 @@ export class LocalTransport implements GameTransport {
 
   send(action: GameAction): string | null {
     try {
-      const next = applyAction(this.state, action, this.clock());
+      const at = this.clock();
+      const next = applyAction(this.state, action, at);
       if (next !== this.state) {
+        this.log.push(logEntry(this.state, action, at));
         this.state = next;
         this.listeners.forEach((l) => l(next));
       }

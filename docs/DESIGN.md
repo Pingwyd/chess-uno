@@ -276,6 +276,8 @@ Every finished game can be replayed, and the replay **doubles as a review**:
   - Includes a **luck meter** that compares the cards each player drew with the average, so players can tell bad luck apart from bad play.
 - **"Try it yourself"** lets you replay a mistake position against the bot.
 
+> **Implementation note (review branch):** the review bot runs **on the device in a Web Worker** by default, so local games are reviewed offline. For online games the server runs the same analysis in a `worker_thread` and caches it (`game_reviews`). Labels add **Brilliant** and **Great** on top of Best–Blunder. Skip feedback compares the double turn with a normal one, and is not an endgame-holding heuristic. "Try it yourself" is not built yet. See the README section *Replays and review*.
+
 ---
 
 ## 10. Social Features

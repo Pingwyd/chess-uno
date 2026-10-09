@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { getOnlineClient, OnlineTransport, SERVER_URL, type OnlineView } from '../net/online';
+import { getOnlineClient, OnlineTransport, SERVER_URL, type MyOnlineGame, type OnlineView } from '../net/online';
+import { outcome, when, type OpenReplay } from './RecentGames';
 import { normalizeCode, type PublicUser } from '../net/protocol';
 import { GameScreen, type OnlineBinding } from './GameScreen';
 import type { PieceSet } from './pieces';
@@ -17,12 +18,13 @@ interface Props {
   onTogglePieces: () => void;
   onHome: () => void;
   intent: OnlineIntent;
+  onReplay: OpenReplay;
 }
 
 const client = getOnlineClient();
 const useOnline = (): OnlineView => useSyncExternalStore((f) => client.subscribe(f), () => client.view);
 
-export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent }: Props) {
+export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent, onReplay }: Props) {
   const view = useOnline();
   const [bootError, setBootError] = useState<string | null>(null);
   const transport = useMemo(() => new OnlineTransport(client), []);
@@ -64,13 +66,14 @@ export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePiece
         onTogglePieces={onTogglePieces}
         onHome={() => { client.leave(); onHome(); }}
         online={online}
+        onReview={(src, tab) => { client.leave(); onReplay(src, tab); }}
       />
     );
   }
-  return <Lobby view={view} bootError={bootError} onHome={onHome} />;
+  return <Lobby view={view} bootError={bootError} onHome={onHome} onReplay={onReplay} />;
 }
 
-function Lobby({ view, bootError, onHome }: { view: OnlineView; bootError: string | null; onHome: () => void }) {
+function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootError: string | null; onHome: () => void; onReplay: OpenReplay }) {
   const [auth, setAuth] = useState<'login' | 'signup' | null>(null);
   const [code, setCode] = useState('');
   const user = view.user;
@@ -148,6 +151,7 @@ function Lobby({ view, bootError, onHome }: { view: OnlineView; bootError: strin
           </section>
 
           <Leaderboard me={user} />
+          {user && <MyGames me={user} onReplay={onReplay} />}
         </div>
       )}
 
@@ -195,6 +199,27 @@ function WaitingRoom({ code }: { code: string }) {
         <button className="btn ghost" onClick={() => client.leave()}>Cancel</button>
       </div>
       <div className="spinner big" />
+    </section>
+  );
+}
+
+function MyGames({ me, onReplay }: { me: PublicUser; onReplay: OpenReplay }) {
+  const [rows, setRows] = useState<MyOnlineGame[] | null>(null);
+  useEffect(() => { client.myGames().then(setRows).catch(() => setRows([])); }, [me.id, me.wins, me.losses, me.draws]);
+  if (!rows?.length) return null;
+  return (
+    <section className="lobby-card recent" data-testid="my-online-games">
+      <h2>Your recent games</h2>
+      {rows.slice(0, 6).map((g) => {
+        const o = outcome({ result: { winner: g.winner, reason: g.reason } as never, you: g.seat });
+        return (
+          <button key={g.gameId} className="recent-item" onClick={() => onReplay({ gameId: g.gameId })}>
+            <span className={`ri-res ${o.cls}`}>{o.text}</span>
+            <span className="ri-main"><b>vs {g.players[g.seat === 0 ? 1 : 0]}</b><small>{g.rated ? 'Rated' : 'Casual'} · {g.reason} · {g.turns} turns · {when(g.endedAt)}</small></span>
+            <span className="ri-go">Review ›</span>
+          </button>
+        );
+      })}
     </section>
   );
 }

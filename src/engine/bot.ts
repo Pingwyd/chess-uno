@@ -15,7 +15,7 @@ import { evaluate, VALUE } from './evaluate';
 
 export type BotLevel = 'easy' | 'medium' | 'hard';
 
-interface LevelParams {
+export interface LevelParams {
   beam: number;          // quiet moves kept per ply of our own turn
   tactical: number;      // max checks/captures kept per ply
   reply: 0 | 1 | 2;      // opponent reply depth (moves) used to score our turn
@@ -34,7 +34,7 @@ const MATE = 100000;
 
 type Rand = () => number;
 
-interface SearchCtx {
+export interface SearchCtx {
   color: Color;
   params: LevelParams;
   cache: Map<string, number>;
@@ -44,7 +44,7 @@ interface SearchCtx {
 const posKey = (pos: Position) => placementFen(pos.board) + pos.castling;
 
 /** Score a position at the end of our turn, assuming the opponent moves next. */
-function scoreAfterTurn(pos: Position, ctx: SearchCtx): number {
+export function scoreAfterTurn(pos: Position, ctx: SearchCtx): number {
   const key = posKey(pos);
   const cached = ctx.cache.get(key);
   if (cached !== undefined) return cached;
@@ -101,9 +101,9 @@ function replyScore(pos: Position, ctx: SearchCtx): number {
   return 0.43 * best1 + 0.57 * best2;
 }
 
-interface Line { moves: Move[]; score: number }
+export interface Line { moves: Move[]; score: number }
 
-function searchTurn(pos: Position, left: number, ctx: SearchCtx): Line {
+export function searchTurn(pos: Position, left: number, ctx: SearchCtx): Line {
   const me = ctx.color, them = other(me);
   const moves = legalMoves(pos, me);
   if (!moves.length) return { moves: [], score: scoreAfterTurn(pos, ctx) };

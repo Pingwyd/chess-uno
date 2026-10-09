@@ -7,7 +7,11 @@ import type { LastMoveAnim } from './Board';
 import { PlayerZone } from './PlayerZone';
 import { CardBack, CardFace } from './Card';
 import { useGame, type GameSetup, BOT_NAMES } from './useGame';
-import type { GameTransport } from '../net/transport';
+import { LocalTransport, type GameTransport } from '../net/transport';
+import { newRecordId, type GameRecord } from '../replay/record';
+import { saveGame } from '../replay/store';
+import { fetchServerRecord } from '../replay/remote';
+import type { ReplaySource } from './replay/ReplayScreen';
 import type { ChatMessage, EmoteId, RoomSnapshot } from '../net/protocol';
 import { ChatPanel } from './ChatPanel';
 import { BoardView, has3D, type BoardMode } from './BoardView';
@@ -34,6 +38,8 @@ interface Props {
   onTogglePieces: () => void;
   onHome: () => void;
   online?: OnlineBinding;
+  /** Open the replay / review of the finished game. */
+  onReview?: (src: ReplaySource, tab?: 'replay' | 'review') => void;
 }
 
 interface Reveal { key: number; kind: CardKind; toHand: boolean; capped: boolean; flip: boolean; hidden: boolean }
@@ -47,8 +53,9 @@ export function GameScreen(props: Props) {
   return <Game key={gameKey} {...props} gameKey={gameKey} onRematch={() => setGameKey((k) => k + 1)} />;
 }
 
-function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, onRematch, online }: Props & { gameKey: number; onRematch: () => void }) {
-  const { state, now, dispatch, error: localError } = useGame(setup, gameKey, online?.transport);
+function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, onRematch, online, onReview }: Props & { gameKey: number; onRematch: () => void }) {
+  const { state, now, dispatch, error: localError, transport } = useGame(setup, gameKey, online?.transport);
+  const saved = useSaveFinishedGame(state, transport, setup, online);
   const error = online ? online.error : localError;
   const wide = useMediaQuery('(min-width: 1000px) and (min-aspect-ratio: 5/4)');
   const pass = setup.mode === 'pass';
@@ -274,7 +281,8 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
         </div>
       )}
       {state.phase === 'over' && state.result && (
-        <GameOver state={state} result={state.result} pass={pass} onRematch={onRematch} onHome={onHome} online={online} />
+        <GameOver state={state} result={state.result} pass={pass} onRematch={onRematch} onHome={onHome} online={online}
+          onReview={onReview && (online ? online.snap.you !== null : true) ? async () => { const src = await saved(); if (src) onReview(src, 'review'); } : undefined} />
       )}
     </div>
   );
@@ -346,7 +354,54 @@ const REASON: Record<GameResult['reason'], string> = {
   'timeout-vs-insufficient': 'Time out vs. insufficient material',
 };
 
-function GameOver({ state, result, pass, onRematch, onHome, online }: { state: GameState; result: GameResult; pass: boolean; onRematch: () => void; onHome: () => void; online?: OnlineBinding }) {
+/**
+ * Saves every finished game to this device (recent games + replay). Local games are recorded by the
+ * LocalTransport; online games are fetched from the server, which holds the authoritative full log
+ * (clients only ever see redacted snapshots). Returns a function resolving to the replay source.
+ */
+function useSaveFinishedGame(state: GameState, transport: GameTransport, setup: GameSetup, online?: OnlineBinding) {
+  const job = useRef<Promise<ReplaySource | null> | null>(null);
+  const over = state.phase === 'over';
+  const gameId = online?.snap.gameId;
+  const you = online ? online.snap.you : null;
+  useEffect(() => {
+    if (!over || job.current) return;
+    if (online) {
+      if (you === null || !gameId) return; // spectators don't keep a copy
+      job.current = (async () => {
+        // The server persists the game as it ends; retry briefly in case we're a little early.
+        for (let i = 0; i < 4; i++) {
+          const rec = await fetchServerRecord(gameId);
+          if (rec?.online) {
+            const mine: GameRecord = { ...rec, online: { ...rec.online, you } };
+            await saveGame(mine).catch(() => {});
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+        }
+        return { gameId };
+      })();
+      return;
+    }
+    if (!(transport instanceof LocalTransport)) return;
+    const rec: GameRecord = {
+      v: 1,
+      id: newRecordId(),
+      mode: setup.mode === 'pass' ? 'pass' : 'bot',
+      config: transport.config,
+      startedAt: transport.startedAt,
+      endedAt: transport.log.length ? transport.log[transport.log.length - 1].at : Date.now(),
+      actions: transport.log.slice(),
+      result: state.result,
+      ...(setup.mode === 'bot' ? { botLevel: setup.botLevel } : {}),
+    };
+    job.current = saveGame(rec, state).then(() => ({ id: rec.id }), () => null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [over]);
+  return () => job.current ?? Promise.resolve(gameId ? { gameId } : null);
+}
+
+function GameOver({ state, result, pass, onRematch, onHome, online, onReview }: { state: GameState; result: GameResult; pass: boolean; onRematch: () => void; onHome: () => void; online?: OnlineBinding; onReview?: () => void }) {
   const info = online?.snap.result;
   const panel = (viewer: PlayerId | null, rotated: boolean) => {
     const draw = result.winner === null;
@@ -372,6 +427,12 @@ function GameOver({ state, result, pass, onRematch, onHome, online }: { state: G
           </div>
         )}
         {info && <div className="seed-note">Deck seed {info.seed} — the shuffle can be verified</div>}
+        {onReview && (
+          <button className="btn review-btn" onClick={onReview} data-testid="review-game">
+            <span className="review-btn-icon">✦</span>
+            <span><b>Review game</b><small>Replay every turn with the review bot</small></span>
+          </button>
+        )}
         <div className="panel-actions">
           <button className="btn primary" onClick={onRematch}>{online ? 'New game' : 'Rematch'}</button>
           <button className="btn ghost" onClick={onHome}>Menu</button>

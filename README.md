@@ -49,21 +49,26 @@ BASE_URL=http://localhost:4300 npm run screenshots   # plays both modes with Pla
 ```
 src/
   rules/      chess.ts (move gen), cards.ts (deck + seeded RNG), game.ts (Chess Uno reducer)
-  engine/     evaluate.ts, bot.ts (turn search), bot.worker.ts, botClient.ts
+  engine/     evaluate.ts, bot.ts (turn search), bot.worker.ts, botClient.ts,
+              review.ts (review bot), review.worker.ts, reviewClient.ts
+  replay/     record.ts (game records, reconstruct), store.ts (IndexedDB recent games), remote.ts
   net/        transport.ts (GameTransport seam + LocalTransport), protocol.ts (wire types shared with
               the server), online.ts (OnlineClient + OnlineTransport)
   ui/         React screens/components, pieces/ (SVG sets), styles.css,
               useBoardInteraction.ts (selection/targets shared by 2D and 3D), BoardView.tsx (2D/3D switch),
               three/ (lazy 3D board: Board3D.tsx, pieceGeometry.ts, materials.ts, mapping.ts),
-              learn/ (lazy learning-path screens: LearnScreen, LessonPlayer, PuzzleView, DemoBoard)
+              learn/ (lazy learning-path screens: LearnScreen, LessonPlayer, PuzzleView, DemoBoard),
+              replay/ (lazy replay viewer + review), RecentGames.tsx
   learn/      learning path: types, engine.ts (puzzle runner/judge/solver), progress.ts (XP/streak/badges,
               shared with the server), store.ts (localStorage + /api/learn sync), outline.ts, content/
-server/       Node game server (npm workspace): src/{index,app,hub,room,redact,auth,http,db,rating,config}.ts
+server/       Node game server (npm workspace): src/{index,app,hub,room,redact,auth,http,db,rating,config,review}.ts
               and test/ (two simulated clients over real sockets)
 tests/        Vitest: chess.test.ts (perft etc.), game.test.ts (card rules), bot.test.ts, board3d.test.ts,
-              learn.test.ts (every puzzle verified against the engine + progress model)
+              learn.test.ts (every puzzle verified against the engine + progress model),
+              review.test.ts (classification, crafted positions, replay reconstruction, store)
 docs/         DESIGN.md, screenshots/
-scripts/      screenshots.mjs, reverse-shot.mjs, online-e2e.mjs, board3d-shots.mjs, learn-shots.mjs (Playwright), preview-pieces.tsx
+scripts/      screenshots.mjs, reverse-shot.mjs, online-e2e.mjs, board3d-shots.mjs, learn-shots.mjs, review-shots.mjs
+              (Playwright), review-fixtures.ts, preview-pieces.tsx
 ```
 
 ### Built to grow
@@ -203,6 +208,60 @@ A Duolingo-style path that teaches Chess Uno from zero. Open it with **Learn** o
 |---|---|---|
 | ![](docs/screenshots/learn-path-desktop.jpg) | ![](docs/screenshots/learn-puzzle-desktop.jpg) | ![](docs/screenshots/learn-puzzle-3d.jpg) |
 
+## Replays and review
+
+Every finished game is saved and can be replayed and reviewed — vs bot, Pass & Play and online. Open one with **Review game** on the game-over screen, from **Recent games** on the home screen (all games in a sheet, with delete), from **Your recent games** in the online lobby, or through a shared link `?replay=<gameId>` for online games.
+
+- **Saving:**
+  - A game record is the **seeded config, the start time, and the timestamped action log** (`src/replay/record.ts`). The rules are a deterministic reducer, so `reconstruct(record)` re-runs `applyAction` to rebuild **every state exactly, clocks included**. Card actions also log the card kind, so a log stays replayable even if card ids ever change.
+  - Local games are recorded by `LocalTransport`. Records and cached reviews live in **IndexedDB** (localStorage fallback). A small index (`cu.games`, newest 40) drives the lists (`src/replay/store.ts`).
+  - **Online games** are recorded by the server Room: action log v2 with `startedAt`, players and `graceMs`, plus a logged flag-fall `tick`. The log is stored in the existing `games` table. Clients only ever see redacted snapshots, so when an online game ends the players fetch the full record from `GET /api/games/:id/replay` and keep a local copy. Spectators don't save a copy.
+- **Replay viewer** (`src/ui/replay/`, a lazy ~12 KB gzip chunk):
+  - Step per move or per turn, a scrub bar with review markers, autoplay at 0.5×–4×, and jump to start or end. Keyboard: ← → for moves, ↑ ↓ for turns, space to play, Home and End.
+  - Shows the card each turn and its move pips, the cards each player holds, **both clocks at that moment**, and an event chip for draws, Skip, skipped turns, Reverse, check and game over. The board flips after a Reverse like it does live.
+  - Works on the 2D board and the 3D board. Online games have a **Share** button that copies or shares the `?replay=` link.
+- **Review bot** (`src/engine/review.ts`):
+  - A deeper analysis mode of the bot's own turn search: a wider beam, a 2-move reply search and no noise, plus an **exhaustive mate-in-turn search** where a check that doesn't mate ends the turn.
+  - For each turn it works out, **given the card actually drawn**, the best full-turn line and its evaluation. It compares that with the turn played and labels the turn **Brilliant / Great / Best / Good / Inaccuracy / Mistake / Blunder** by win-chance lost. The thresholds are 2 / 5 / 10 / 20 % (`THRESHOLDS`). Brilliant is a best turn that was a sacrifice or a mate needing the whole card; Great is a best turn that swung the game by 20 % or more.
+  - **Flags with plain-language explanations:**
+    - **Early checks that wasted moves**, e.g. "You checked on move 1 of a 3-card, ending your turn; Be7, Bf6 then Rd8# was mate."
+    - **Missed and found mates**, plus "allowed mate".
+    - **Hanging pieces**, e.g. "Black can answer Kxd7, winning a queen".
+    - **Reverse timing** (good or bad), and **Skip timing**: a well-timed double turn, or a Skip wasted.
+  - **Show better line** draws the engine's line as numbered green arrows and the played line as red dashed arrows, on the 2D and 3D boards. **Play the line** animates it.
+  - The **Review tab** has:
+    - accuracy % per player, using a chess-style accuracy-from-loss curve;
+    - an **evaluation graph** (win % for each side) with markers you can click to jump;
+    - a **luck meter**: for each turn, the best turn with the card drawn compared with the deck-weighted average over 1/2/3 cards, plus average card against the deck's 1.79 and action cards drawn;
+    - **key moments**, the biggest swings (up to 5), with **View** and **Better line**;
+    - label counts.
+  - It runs in a **Web Worker on the device**, so reviews work offline. A 40-turn game takes about 5–9 s (measured in Node on the dev box). Reviews are cached with the record.
+  - For online games the client first asks the server, via `GET /api/games/:id/review`. The server runs the same code in a `worker_thread` and caches the result in a new `game_reviews` table (migration `003_reviews`, keyed by review version). If the server is unreachable, the device analyses the game itself.
+- **API additions:**
+  - `GET /api/games/:id/replay`: public by the unguessable game id, **chat excluded**.
+  - `GET /api/games/:id/review`.
+  - `GET /api/my/games`: needs auth; returns your last 30 finished games.
+- **Tests:** `tests/review.test.ts` covers:
+  - classification thresholds and the special labels;
+  - crafted positions: it finds the quiet 3-move mate and the rook-ladder mate, flags early checks with the expected text, labels a hung queen as a blunder, and scores a played mate as best;
+  - **replay reconstruction**: every live state of a real `LocalTransport` game, including fresh events, timestamps and clocks, matches the rebuilt frames; also card-id remapping, server-log conversion and whole-game aggregates;
+  - the recent-games store.
+
+  The server test checks the replay and review endpoints end to end against the live room state.
+- **Screenshots:** `node scripts/review-shots.mjs` (needs `vite preview` on 4310; `ONLY=gameover,mobile,desktop,3d,recent,online`). It plays a real game to game over and opens its review, and uses deterministic saved games from `scripts/review-fixtures.ts` for the rest. `scripts/online-e2e.mjs` also reviews a finished rated game through the server.
+
+| Game over | Replay | Better line (arrows) | Review summary | 3D replay |
+|---|---|---|---|---|
+| ![](docs/screenshots/review-game-over.jpg) | ![](docs/screenshots/review-replay-mobile.jpg) | ![](docs/screenshots/review-better-line-mobile.jpg) | ![](docs/screenshots/review-summary-mobile.jpg) | ![](docs/screenshots/review-3d.jpg) |
+
+| Desktop replay | Desktop review + better line | Shared online replay |
+|---|---|---|
+| ![](docs/screenshots/review-replay-desktop.jpg) | ![](docs/screenshots/review-desktop.jpg) | ![](docs/screenshots/review-online-shared.jpg) |
+
+| Recent games | All games |
+|---|---|
+| ![](docs/screenshots/review-recent-home.jpg) | ![](docs/screenshots/review-recent-all.jpg) |
+
 ## Rule decisions made for the MVP
 
 These follow `docs/DESIGN.md`. Where the doc left a gap, this is what the code does:
@@ -221,4 +280,4 @@ These follow `docs/DESIGN.md`. Where the doc left a gap, this is what the code d
 
 ## Not in the MVP yet
 
-A leaderboard screen beyond the lobby top 10, seasons, friends lists, rematch offers, draw offers, replay/AI review, server-enforced ranked unlock, monetization, and bot levels 4–5 (Bishop and Queen). Online play is groundwork: it hasn't been deployed or load-tested. See the roadmap in `docs/DESIGN.md` §13.
+A leaderboard screen beyond the lobby top 10, seasons, friends lists, rematch offers, draw offers, "try it yourself" from a review position, server-enforced ranked unlock, monetization, and bot levels 4–5 (Bishop and Queen). Online play is groundwork: it hasn't been deployed or load-tested. See the roadmap in `docs/DESIGN.md` §13.

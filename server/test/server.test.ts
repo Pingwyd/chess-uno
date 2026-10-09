@@ -118,6 +118,33 @@ describe('online game', () => {
     let st = createGame({ seed: log.seed, clockMs: s.app.config.clockMs, player0Color: log.player0Color, players: [{ name: 'a', kind: 'human' }, { name: 'b', kind: 'human' }] }, 0);
     for (const x of log.actions) st = applyAction(st, x.action, 0);
     expect(st.result).toEqual(final.state.result);
+
+    // Replay record (shareable, no chat): rebuilds the live game exactly, clocks included.
+    const rep = await api(s.base, `/api/games/${final.gameId}/replay`);
+    expect(rep.status).toBe(200);
+    expect(rep.json.record).toMatchObject({ mode: 'online', online: { gameId: final.gameId, rated: false } });
+    expect(JSON.stringify(rep.json)).not.toContain('"chat"');
+    const { reconstruct } = await import('../../src/replay/record');
+    const replay = reconstruct(rep.json.record);
+    expect(replay.consistent).toBe(true);
+    const live = s.app.hub.rooms.get(final.code)?.state;
+    if (live) {
+      expect(replay.final.history).toEqual(live.history);
+      expect(replay.final.clocks).toEqual(live.clocks);
+      expect(replay.final.pos).toEqual(live.pos);
+    }
+    // Server-side review (worker thread), cached after the first request.
+    const rev = await api(s.base, `/api/games/${final.gameId}/review`);
+    expect(rev.status).toBe(200);
+    expect(rev.json.review.turns.length).toBeGreaterThan(0);
+    expect(rev.json.review.players[0]).toHaveProperty('accuracy');
+    const cached = await s.app.db.selectFrom('game_reviews').select('game_id').where('game_id', '=', final.gameId).executeTakeFirst();
+    expect(cached?.game_id).toBe(final.gameId);
+    // Each player's recent games list.
+    const mine = await api(s.base, '/api/my/games', undefined, a.token);
+    expect(mine.json.games[0]).toMatchObject({ gameId: final.gameId, seat: a.snap!.you });
+    expect((await api(s.base, '/api/my/games')).status).toBe(401);
+    expect((await api(s.base, '/api/games/00000000-0000-0000-0000-000000000000/replay')).status).toBe(404);
   }, 120_000);
 
   it('rejects illegal moves and out-of-turn actions', async () => {
@@ -145,6 +172,11 @@ describe('online game', () => {
     const toMove = seatToMove(a);
     const over = await a.waitSnap((x) => x.state.phase === 'over' && !!x.result, 5000);
     expect(over.state.result).toEqual({ winner: toMove === 0 ? 1 : 0, reason: 'timeout' });
+    // The flag fall is in the log, so the replay ends the same way.
+    await new Promise((r) => setTimeout(r, 100));
+    const rep = await api(s.base, `/api/games/${over.gameId}/replay`);
+    const { reconstruct } = await import('../../src/replay/record');
+    expect(reconstruct(rep.json.record).final.result).toEqual(over.state.result);
   });
 
   it('disconnect grace defaults to 90 s (1m30s) and is advertised to the opponent', async () => {

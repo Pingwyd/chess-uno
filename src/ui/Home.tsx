@@ -9,6 +9,7 @@ import { useProgress } from '../learn/store';
 import { OUTLINE_SHAPE as PATH_SHAPE, lessonTitle } from '../learn/outline';
 import { localDay, nextLesson, pathOrder, streak, utcDay } from '../learn/progress';
 import type { LearnTab } from './learn/LearnScreen';
+import { RecentGames, type OpenReplay } from './RecentGames';
 
 interface Props {
   pieceSet: PieceSet;
@@ -20,6 +21,7 @@ interface Props {
   onStart: (setup: GameSetup) => void;
   onOnline: () => void;
   onLearn: (tab: LearnTab) => void;
+  onReplay: OpenReplay;
 }
 
 const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
@@ -28,7 +30,7 @@ const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
   { id: 'hard', name: 'Rook', blurb: 'Hard', piece: 'R' },
 ];
 
-export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn }: Props) {
+export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn, onReplay }: Props) {
   const progress = useProgress();
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
@@ -101,6 +103,8 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
           </div>
         </button>
       </div>
+
+      <RecentGames onOpen={onReplay} />
 
       <div className="home-foot">
         <div className="seg seg-small" role="radiogroup" aria-label="Piece set">

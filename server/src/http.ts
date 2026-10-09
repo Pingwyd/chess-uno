@@ -5,6 +5,7 @@ import type { Database } from './db';
 import { Auth, AuthError, toPublicUser } from './auth';
 import type { ServerConfig } from './config';
 import { mergeProgress, sanitize } from '../../src/learn/progress';
+import { recordFor, type ReviewService } from './review';
 
 const MAX_BODY = 16 * 1024;
 
@@ -40,7 +41,7 @@ function limited(authHits: Map<string, number[]>, req: IncomingMessage, max = 20
   return hits.length > max;
 }
 
-export function createHttpHandler(db: Kysely<Database>, auth: Auth, cfg: ServerConfig) {
+export function createHttpHandler(db: Kysely<Database>, auth: Auth, cfg: ServerConfig, reviews?: ReviewService) {
   const authHits = new Map<string, number[]>();
   return async (req: IncomingMessage, res: ServerResponse) => {
     const origin = req.headers.origin;
@@ -102,6 +103,41 @@ export function createHttpHandler(db: Kysely<Database>, auth: Auth, cfg: ServerC
         const rows = await db.selectFrom('users').selectAll().where('is_guest', '=', 0).where('rated_games', '>', 0)
           .orderBy('rating', 'desc').limit(50).execute();
         return send(200, { players: rows.map((u) => ({ ...toPublicUser(u), email: undefined })) });
+      }
+      if (req.method === 'GET' && url.pathname === '/api/my/games') {
+        // Your recent finished online games (newest first).
+        const user = await auth.verify(bearer(req));
+        if (!user) return send(401, { error: 'Not signed in' });
+        const rows = await db.selectFrom('games').selectAll().where('status', '=', 'finished')
+          .where((eb) => eb.or([eb('player0_id', '=', user.id), eb('player1_id', '=', user.id)]))
+          .orderBy('ended_at', 'desc').limit(30).execute();
+        const ids = [...new Set(rows.flatMap((g) => [g.player0_id, g.player1_id]))];
+        const users = ids.length ? await db.selectFrom('users').select(['id', 'name']).where('id', 'in', ids).execute() : [];
+        const name = (id: string) => users.find((u) => u.id === id)?.name ?? 'Player';
+        return send(200, {
+          games: rows.map((g) => {
+            const seat = g.player0_id === user.id ? 0 : 1;
+            const log = g.log ? JSON.parse(g.log) as { history?: unknown[] } : null;
+            return {
+              gameId: g.id, rated: !!g.rated, seat, players: [name(g.player0_id), name(g.player1_id)],
+              colors: g.player0_color === 'w' ? ['w', 'b'] : ['b', 'w'],
+              winner: g.winner, reason: g.reason, endedAt: g.ended_at ? new Date(g.ended_at as never).getTime() : 0, turns: log?.history?.length ?? 0,
+            };
+          }),
+        });
+      }
+      const replayMatch = url.pathname.match(/^\/api\/games\/([0-9a-f-]{36})\/(replay|review)$/);
+      if (req.method === 'GET' && replayMatch) {
+        // Shareable replays: anyone with the (unguessable) game id can watch a finished game. No chat, no emails.
+        const g = await db.selectFrom('games').selectAll().where('id', '=', replayMatch[1]).executeTakeFirst();
+        if (!g || g.status !== 'finished') return send(404, { error: 'Game not found' });
+        if (replayMatch[2] === 'replay') {
+          const record = await recordFor(db, g);
+          return record ? send(200, { record }) : send(404, { error: 'No log for this game' });
+        }
+        if (!reviews) return send(404, { error: 'Server analysis is disabled' });
+        const review = await reviews.get(g);
+        return review ? send(200, { review }) : send(404, { error: 'No log for this game' });
       }
       const gameMatch = url.pathname.match(/^\/api\/games\/([0-9a-f-]{36})$/);
       if (req.method === 'GET' && gameMatch) {

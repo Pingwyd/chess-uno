@@ -50,10 +50,19 @@ export interface LearnTable {
   updated_at: string;
 }
 
+/** Cached review-bot analysis of a finished online game (src/engine/review.ts). */
+export interface ReviewsTable {
+  game_id: string;
+  version: number;
+  data: string;
+  created_at: string;
+}
+
 export interface Database {
   users: UsersTable;
   games: GamesTable;
   learn_progress: LearnTable;
+  game_reviews: ReviewsTable;
 }
 
 const migrations: Record<string, Migration> = {
@@ -103,6 +112,17 @@ const migrations: Record<string, Migration> = {
         .addColumn('data', 'text', (c) => c.notNull())
         .addColumn('updated_at', 'varchar(32)', (c) => c.notNull())
         .execute();
+    },
+  },
+  '003_reviews': {
+    async up(db: Kysely<any>) {
+      await db.schema.createTable('game_reviews')
+        .addColumn('game_id', 'varchar(36)', (c) => c.primaryKey().references('games.id'))
+        .addColumn('version', 'integer', (c) => c.notNull())
+        .addColumn('data', 'text', (c) => c.notNull())
+        .addColumn('created_at', 'varchar(32)', (c) => c.notNull())
+        .execute();
+      await db.schema.createIndex('games_ended_idx').on('games').column('ended_at').execute();
     },
   },
 };

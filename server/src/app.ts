@@ -7,6 +7,7 @@ import { Auth } from './auth';
 import { Hub } from './hub';
 import { createHttpHandler } from './http';
 import { loadConfig, type ServerConfig } from './config';
+import { ReviewService } from './review';
 
 export interface App {
   server: Server;
@@ -23,7 +24,8 @@ export async function createApp(overrides: Partial<ServerConfig> = {}): Promise<
   const db = await createDb(config.databaseUrl);
   const auth = new Auth(db, config.jwtSecret);
   const hub = new Hub(db, auth, config);
-  const server = createServer(createHttpHandler(db, auth, config));
+  const reviews = new ReviewService(db);
+  const server = createServer(createHttpHandler(db, auth, config, reviews));
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
   wss.on('connection', (ws, req) => hub.handleConnection(ws, req));
 
@@ -43,6 +45,7 @@ export async function createApp(overrides: Partial<ServerConfig> = {}): Promise<
     listen: (port = config.port) => new Promise((resolve) => server.listen(port, () => resolve((server.address() as AddressInfo).port))),
     async close() {
       clearInterval(beat);
+      reviews.close();
       hub.close();
       for (const ws of wss.clients) ws.terminate();
       await new Promise<void>((r) => wss.close(() => r()));
