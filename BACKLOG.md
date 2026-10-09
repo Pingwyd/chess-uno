@@ -51,35 +51,37 @@ Work that is planned but not built yet, roughly in priority order within each se
 - Respect the OS silent mode on Android (Capacitor).
 - Add a test-sound button per channel; persist settings to the account.
 
-## 6. Push notifications (turn + streak)
+## 6. Push notifications (server push, app closed)
 
-- The Settings → Notifications toggles exist as **placeholders** (saved in `cu.settings.notify`, marked PREVIEW).
-- Web Push (VAPID) for the web; FCM via Capacitor for Android. Store tokens per device server-side.
-- **Turn:** "Your move vs Ada", sent only when the player is backgrounded/offline and the game has a long enough clock (correspondence or the disconnect grace).
-- **Streak:** a daily reminder at the user's local evening if today's lesson or daily puzzle isn't done, plus a streak-freeze notice.
-- **Friends / challenges:** a friend request received or accepted, and a challenge received. A challenge is only worth a push if its TTL is extended for offline friends.
-- Rate-limit per user; respect the toggles server-side; one-tap unsubscribe.
+Shipped (extras PR): **browser notifications while the app is open in a background tab.** Settings → Notifications has a "Browser notifications" switch that asks for permission; the per-kind toggles (your turn, challenges and rematch offers, friend requests, streak) apply. A notifications-only service worker (`public/sw.js`, no caching) shows them and focuses the app on click. The daily streak reminder is a local check on app open plus an evening (19:00) check while the app stays open.
 
-## 7. Rematch button
+Still to do:
+- Web Push (VAPID) for the web; FCM via Capacitor for Android. Store push subscriptions per device server-side; the existing service worker gets a `push` handler.
+- **Turn:** "Your move vs Ada" when the tab is closed or the device is asleep, only for games with a long enough clock (correspondence, or during the disconnect grace).
+- **Streak:** a server-scheduled evening reminder in the user's zone when the app isn't open (Periodic Background Sync is Chromium-only and unreliable, so use push), plus a streak-freeze notice.
+- **Friends / challenges:** a challenge is only worth a push if its TTL is extended for offline friends.
+- Rate-limit per user; respect the toggles server-side (sync `cu.settings.notify` to the account); one-tap unsubscribe.
 
-- On game over (online), offer **Rematch**. The server keeps the room for ~30 s after `finished`. If both players accept, start a new game with colours swapped and the same rated/casual flag.
-- Show "Opponent wants a rematch" with accept/decline. Declining or timing out returns both players to the lobby.
-- For bot and pass & play: "Play again" with swapped colours (partly there).
+## 7. Rematch (done)
 
-## 8. Extra time controls
+Shipped: Rematch on game over everywhere, with colours swapping. Vs bot flips your side; Pass & Play swaps the players' seats. Online: offer → the opponent sees Accept / Decline; withdrawing, declining, leaving the game screen or disconnecting cancels the offer. Accepting starts a new room with the same rated/private flag and clock. Finished rooms stay open for 10 minutes, so offers can be made until then.
 
-- Today every game is 10 minutes per player (`CLOCK_MS`).
-- Add **5-min blitz** and maybe 3-min and 15-min.
-- Each time control gets its own matchmaking queue and **its own rating** (`ratings` table keyed by user + control), with leaderboard tabs per control.
-- Store the control on the game (`games.time_control`) and in the replay config.
-- A clock increment option (e.g. 5+3) needs a per-turn increment in the shared reducer.
-- Show the control on Live games rows and in challenges (challenge settings: control, colour, rated).
+Later: an offer timeout with a countdown, and "rematch" counts in the head-to-head record on profiles.
 
-## 9. "Try it yourself" from review positions
+## 8. Time controls (done: 3 / 5 / 10 min)
 
-- From any replay or review position, branch into a sandbox. You keep playing from that exact state (board, hands, deck order hidden or reshuffled) against the bot or pass & play, then return to the review.
-- The engine supports starting from a snapshot (`GameConfig.fen`-style setups are used by lessons). The deck needs a "remaining cards, unknown order" mode so the sandbox can't peek at the real future draws.
-- Also add it to "Better line" suggestions: "Play this line" auto-plays the suggested moves, then hands control to you.
+Shipped: Bullet 3 min, Blitz 5 min and Rapid 10 min (the default, still `CLOCK_MS` on the server), picked with the "Clock" switch on Home (vs bot and Pass & Play), in the online lobby (quick match and invite links) and for friend challenges. The choice is one device setting.
+- **Queues:** quick match only pairs players on the same control (one queue per rated/casual × control).
+- **Ratings:** decision: **one shared rating across controls.** The player pool is small, and card luck plus multi-move turns make speed matter less than in chess. Splitting would leave many players provisional in every control. Revisit with a `ratings` table keyed by user + control, plus leaderboard tabs, once each control has enough players.
+- The control rides on challenges, live-game rows, room snapshots and the replay log (`tc`, `clockMs`).
+
+Later: 15-minute and increment controls (e.g. 5+3, which needs a per-turn increment in the shared reducer), and a `games.time_control` column for stats per control.
+
+## 9. "Try it yourself" (done)
+
+Shipped: from any reviewed turn (the coach card, or a better line), play the position on against Rook Bot. You get the same card and the same deck, with no clocks and nothing saved, plus Undo (your last turn and the reply), Reset and Back to review.
+
+Later: a "hidden future" mode that reshuffles the remaining draw pile so the sandbox doesn't follow the real draws; a Pass & Play sandbox (both sides human); and auto-playing the better line before handing over control.
 
 ## Smaller items
 

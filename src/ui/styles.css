@@ -695,3 +695,7 @@ button:disabled { cursor: default; }
 .sandbox-tools { display: flex; gap: 6px; flex: none; }
 .sandbox-tools .btn { padding: 6px 10px; }
 @media (max-width: 420px) { .sandbox-tools .btn { padding: 6px 8px; font-size: 12.5px; } }
+
+/* Notifications settings */
+.notify-note { display: flex; align-items: flex-start; gap: 6px; }
+.notify-note .icon { flex: none; margin-top: 2px; }

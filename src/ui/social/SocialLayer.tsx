@@ -12,7 +12,7 @@ import { Icon, asIcon } from '../icons';
  * In-app notifications on every screen: incoming friend challenges (accept / decline with a
  * countdown) and short notices (friend requests, accepted, declined…).
  */
-export function SocialLayer({ onAccept, onOpenFriends }: { onAccept: () => void; onOpenFriends: () => void }) {
+export function SocialLayer({ onAccept, onOpenFriends, onOpenLearn }: { onAccept: () => void; onOpenFriends: () => void; onOpenLearn?: () => void }) {
   const view = useOnline();
   const ch = view.challenges[0];
   if (!ch && !view.notices.length) return null;
@@ -24,6 +24,7 @@ export function SocialLayer({ onAccept, onOpenFriends }: { onAccept: () => void;
           <span className="notice-icon"><Icon name={asIcon(n.icon)} size={20} /></span>
           <span className="notice-text">{n.text}</span>
           {n.action === 'friends' && <button className="btn tiny" onClick={() => { client.dismiss(n.id); onOpenFriends(); }}>View</button>}
+          {n.action === 'learn' && onOpenLearn && <button className="btn tiny" onClick={() => { client.dismiss(n.id); onOpenLearn(); }} data-testid="notice-learn">Practise</button>}
           <button className="notice-x" aria-label="Dismiss" onClick={() => client.dismiss(n.id)}><Icon name="x" size={16} /></button>
         </div>
       ))}
