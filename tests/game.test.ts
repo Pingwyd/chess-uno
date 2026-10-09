@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { applyAction, createGame, formatTurn, remainingMs, canPlayCard, currentLegalMoves, type GameState, type GameAction } from '../src/rules/game';
-import { buildDeck, DECK_COMPOSITION, shuffle, type CardKind } from '../src/rules/cards';
+import { applyAction, createGame, formatTurn, remainingMs, canPlayCard, cardBlockReason, currentLegalMoves, reverseExhausted, type GameState, type GameAction } from '../src/rules/game';
+import { buildDeck, DECK_COMPOSITION, DECKS, expectedMoves, numberOdds, shuffle, type CardKind } from '../src/rules/cards';
 import { parseSquare, type PromotionPiece } from '../src/rules/chess';
 
 const sq = parseSquare;
@@ -336,5 +336,85 @@ describe('Reverse (§2.8)', () => {
     s = mv(draw(s), 'h3g1');
     s = mv(draw(s), 'h6g8');
     expect(canPlayCard(s, 1, 'reverse')).toBe(true);
+  });
+});
+
+describe('rules v2: deck mix', () => {
+  it('has fewer 3s but still 42 number cards in 52', () => {
+    expect(DECK_COMPOSITION).toEqual({ '1': 19, '2': 18, '3': 5, skip: 6, reverse: 4 });
+    expect(Object.values(DECK_COMPOSITION).reduce((a, b) => a + b, 0)).toBe(52);
+    expect(buildDeck()).toHaveLength(52);
+    expect(buildDeck().filter((c) => c.kind === '3')).toHaveLength(5);
+    expect(expectedMoves()).toBeCloseTo(70 / 42, 6); // ≈1.67 moves per number card (v1: 1.79)
+    expect(expectedMoves(1)).toBeCloseTo(75 / 42, 6);
+    expect(numberOdds()['3']).toBeCloseTo(5 / 42, 6);
+  });
+  it('keeps the v1 deck for old games', () => {
+    expect(Object.values(DECKS[1]).reduce((a, b) => a + b, 0)).toBe(52);
+    expect(buildDeck(1).filter((c) => c.kind === '3')).toHaveLength(9);
+    expect(createGame({ rules: 1, seed: 3 }).drawPile.filter((c) => c.kind === '3')).toHaveLength(9);
+    expect(createGame({ seed: 3 }).drawPile.filter((c) => c.kind === '3')).toHaveLength(5);
+  });
+});
+
+describe('rules v2: one Reverse per player per game', () => {
+  const dance = ['g1f3', 'g8f6', 'f3g1', 'f6g8', 'b1c3', 'b8c6', 'c3b1', 'c6b8', 'g1h3', 'g8h6'];
+  const play = (order: CardKind[], rules?: 1 | 2) => {
+    let s = createGame({ deckOrder: order, rules });
+    for (const m of dance) s = mv(draw(s), m);
+    return s;
+  };
+  it('a second Reverse held in hand is discarded when the first is played', () => {
+    let s = play(['reverse', 'reverse', ...ones(40)]);
+    expect(s.hands[0].map((c) => c.kind)).toEqual(['reverse', 'reverse']);
+    s = act(s, { type: 'playCard', player: 0, cardId: s.hands[0][0].id });
+    expect(s.reversesUsed).toEqual([1, 0]);
+    expect(reverseExhausted(s, 0)).toBe(true);
+    expect(s.hands[0]).toHaveLength(0);
+    expect(s.events.some((e) => e.type === 'burnCard' && e.player === 0 && e.from === 'hand')).toBe(true);
+    const turn = s.history.find((t) => t.played.includes('reverse'))!;
+    expect(turn.burned).toEqual(['reverse']);
+    expect(formatTurn(turn)).toBe('{Reverse} [Reverse✕]');
+  });
+  it('a Reverse drawn after yours is used is discarded and you draw again', () => {
+    let s = play(['reverse', ...ones(10), '1', 'reverse', '2', ...ones(20)]);
+    s = act(s, { type: 'playCard', player: 0, cardId: s.hands[0][0].id });
+    s = mv(draw(s), 'h3g1'); // opponent (now White)
+    const before = s.events.length;
+    s = draw(s); // player 0 draws the dead Reverse, then a 2
+    const fresh = s.events.slice(before);
+    expect(fresh.find((e) => e.type === 'burnCard')).toMatchObject({ player: 0, from: 'deck', card: { kind: 'reverse' } });
+    expect(s.hands[0]).toHaveLength(0);
+    expect(s.card?.kind).toBe('2');
+    expect(s.movesAllowed).toBe(2);
+    expect(s.discard.some((c) => c.kind === 'reverse')).toBe(true);
+    expect(formatTurn(s.history[s.history.length - 1])).toBe('[Reverse✕] [2]');
+  });
+  it('the reducer (and so the server) rejects a second Reverse', () => {
+    let s = play(['reverse', ...ones(40)]);
+    s = act(s, { type: 'playCard', player: 0, cardId: s.hands[0][0].id });
+    s = mv(draw(s), 'h3g1'); // opponent's turn; now it's player 0 again
+    // Force a Reverse into the hand (can't happen in play: it would have been discarded).
+    s = { ...s, hands: [[{ id: 9999, kind: 'reverse' }], s.hands[1]] };
+    expect(s.current).toBe(0);
+    expect(canPlayCard(s, 0, 'reverse')).toBe(false);
+    expect(cardBlockReason(s, 0, 'reverse')).toMatch(/used your Reverse/);
+    expect(() => act(s, { type: 'playCard', player: 0, cardId: 9999 })).toThrow(/used your Reverse/);
+  });
+  it('the limit is per player: the opponent still has theirs', () => {
+    let t = createGame({ deckOrder: ['1', 'reverse', ...ones(40)] });
+    for (const m of dance) t = mv(draw(t), m);
+    t = mv(draw(t), 'h3g1');
+    expect(t.hands[1].map((c) => c.kind)).toEqual(['reverse']);
+    t = act(t, { type: 'playCard', player: 1, cardId: t.hands[1][0].id });
+    expect(t.reversesUsed).toEqual([0, 1]);
+    expect(reverseExhausted(t, 0)).toBe(false);
+    expect(reverseExhausted(t, 1)).toBe(true);
+  });
+  it('rules v1 games keep unlimited Reverses', () => {
+    let s = play(['reverse', 'reverse', ...ones(40)], 1);
+    s = act(s, { type: 'playCard', player: 0, cardId: s.hands[0][0].id });
+    expect(s.config.reverseLimit).toBeNull();
+    expect(s.hands[0].map((c) => c.kind)).toEqual(['reverse']);
   });
 });

@@ -339,4 +339,18 @@ describe('spectators and chat', () => {
     for (let i = 0; i < 5; i++) a.send({ t: 'chat', text: `spam ${i}` });
     expect(await a.waitFor((m) => m.t === 'error' && m.code === 'rate')).toBeTruthy();
   });
+  it('enforces one Reverse per player per game (rules v2)', async () => {
+    const s = await startApp(); app = s.app;
+    const { a, b } = await privateGame(s.base, s.port);
+    const room = [...s.app.hub.rooms.values()][0];
+    expect(room.state!.config.rules).toBe(2);
+    expect(room.exportLog()).toMatchObject({ rules: 2 });
+    const seat = room.state!.current;
+    // Pretend this seat already used its Reverse and somehow still holds one.
+    room.state = { ...room.state!, reversesUsed: seat === 0 ? [1, 0] : [0, 1], turnsCompleted: [9, 9], isOpeningTurn: false, openingCapPending: false, hands: [[], []] };
+    room.state.hands[seat] = [{ id: 998, kind: 'reverse' }];
+    const err = room.apply(seat, { type: 'playCard', player: seat, cardId: 998 });
+    expect(err).toMatch(/used your Reverse/);
+    void a; void b;
+  });
 });

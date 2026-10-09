@@ -33,7 +33,7 @@ BASE_URL=http://localhost:4300 npm run screenshots   # plays both modes with Pla
 
 - **Rules engine** (`src/rules`), pure TypeScript, no DOM:
   - Full chess with castling, en passant, promotion, check, checkmate, stalemate, and automatic draws by threefold repetition, the 50-move rule, and insufficient material. Move generation is checked against standard perft positions.
-  - The Chess Uno layer: a shared, seeded 52-card deck (18×1, 15×2, 9×3, 6 Skip, 4 Reverse) that reshuffles the discard pile when the draw pile runs out. A number card gives that many moves in a row. **Giving check ends your turn.** **White's first turn is capped at 1 move.** Skip and Reverse are held in your hand (max 2) and played at the start of a turn. Reverse swaps sides, and clocks and hands stay with their players. Checkmate is checked at the end of a turn, and the king can never be captured.
+  - The Chess Uno layer: a shared, seeded 52-card deck (19×1, 18×2, 5×3, 6 Skip, 4 Reverse; about 1.67 moves per number card) that reshuffles the discard pile when the draw pile runs out. A number card gives that many moves in a row. **Giving check ends your turn.** **White's first turn is capped at 1 move.** Skip and Reverse are held in your hand (max 2) and played at the start of a turn. Reverse swaps sides, and clocks and hands stay with their players. **Each player gets one Reverse per game.** Checkmate is checked at the end of a turn, and the king can never be captured.
   - A 10-minute clock per player. Running out of time loses, unless your opponent can't possibly mate, in which case it's a draw. There's a 1-second grace period for the card reveal, plus pause.
   - Extended turn notation such as `[3] e5 Nf6 Nc6`, `[Skip→hand] [2] d5 Nc6`, and `{Reverse}`.
 - **Bot** (`src/engine`) that understands multi-move turns. It searches sequences of up to N moves, where any check ends the sequence just like the rule. It then scores the result against the opponent's best 1- or 2-move reply, weighted by deck odds. There are three levels: **Pawn** (easy), **Knight** (medium) and **Rook** (hard). They differ in search width, reply depth and deliberate noise, and they also decide when to play Skip and Reverse. The bot runs in a Web Worker.
@@ -177,7 +177,7 @@ A Duolingo-style path that teaches Chess Uno from zero. Open it with **Learn** o
   - Explainers with animated board demos that loop, with captions taken from the engine's events.
   - Multiple-choice questions.
   - Interactive puzzles: a fixed position plus fixed card(s), and sometimes a hand of Skip/Reverse cards.
-- **Puzzles run on the real rules engine** (`src/rules`, unchanged). The learner's moves go through `applyAction`, and the puzzle ends when the learner's turn ends (card used up, check, mate, Skip/Reverse). The result is then judged on the final state against declarative goals: `mate`, `check`, `occupy`, `capture`, `captureType`, `promote`, `safe` (the opponent can't mate with an N-move turn), `keep` (the opponent can't win a given piece), `keepCard`, `lead` (material lead) and `noCheck`. **Any line that meets the goals is accepted**, not just the authored one. An early check that ends your turn gets its own explanation.
+- **Puzzles run on the real rules engine** (`src/rules`, shared with live games). The learner's moves go through `applyAction`, and the puzzle ends when the learner's turn ends (card used up, check, mate, Skip/Reverse). The result is then judged on the final state against declarative goals: `mate`, `check`, `occupy`, `capture`, `captureType`, `promote`, `safe` (the opponent can't mate with an N-move turn), `keep` (the opponent can't win a given piece), `keepCard`, `lead` (material lead) and `noCheck`. **Any line that meets the goals is accepted**, not just the authored one. An early check that ends your turn gets its own explanation.
 - **Help:** hints (they cost a star), Reset, "Show solution" after a miss (it animates the line), and a 2D/3D toggle. There are no hearts: mistakes only lower the stars.
 - **Gamification:**
   - **XP:** 10 + 5 per star for a lesson; replays earn 5 + 5 per extra star; 20 for the daily puzzle, 30 for passing placement.
@@ -232,7 +232,7 @@ Every finished game is saved and can be replayed and reviewed — vs bot, Pass &
   - The **Review tab** has:
     - accuracy % per player, using a chess-style accuracy-from-loss curve;
     - an **evaluation graph** (win % for each side) with markers you can click to jump;
-    - a **luck meter**: for each turn, the best turn with the card drawn compared with the deck-weighted average over 1/2/3 cards, plus average card against the deck's 1.79 and action cards drawn;
+    - a **luck meter**: for each turn, the best turn with the card drawn compared with the deck-weighted average over 1/2/3 cards, plus average card against the deck's average (1.67 for v2 games, 1.79 for older ones) and action cards drawn;
     - **key moments**, the biggest swings (up to 5), with **View** and **Better line**;
     - label counts.
   - It runs in a **Web Worker on the device**, so reviews work offline. A 40-turn game takes about 5–9 s (measured in Node on the dev box). Reviews are cached with the record.
@@ -277,6 +277,10 @@ These follow `docs/DESIGN.md`. Where the doc left a gap, this is what the code d
 9. **White's opening cap** applies only to games that start from the standard position.
 10. **Pass & Play:** the top player's pieces face them, as in the reference screenshot. Player 1 sits at the bottom and starts as White. After a Reverse, the board spins so each player's new pieces end up in front of them.
 11. Draw by agreement exists in the engine but has no button in this MVP.
+12. **Rules v2** (after playtesting found the cards too swingy):
+    - **Fewer 3s:** the deck is now 19×1, 18×2, 5×3, 6 Skip, 4 Reverse (was 18×1, 15×2, 9×3). A number card averages 70/42 ≈ **1.67 moves** (was 1.79), and P(3) per number card drops from 21% to 12%.
+    - **One Reverse per player per game.** After you play yours, any other Reverse in your hand is discarded, and any Reverse you draw later is discarded and you draw again (`[Reverse✕]` in the notation). It never takes a hand slot. The shared reducer rejects a second Reverse, so the online server enforces it too. Your hand shows a greyed "USED" Reverse with a tooltip.
+    - **Versioned:** `GameConfig.rules` (`src/rules/cards.ts`: `RULES_VERSION = 2`). Saved and online games recorded before v2 have no `rules` field and replay with the v1 deck and no Reverse limit, so old replays stay exact. The bot and review engine use the v2 card odds; the review is cached by `REVIEW_VERSION`, now 3.
 
 ## Not in the MVP yet
 

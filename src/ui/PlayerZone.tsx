@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { PromotionPiece } from '../rules/chess';
-import { canPlayCard, cardBlockReason, remainingMs, type GameAction, type GameState, type PlayerId } from '../rules/game';
+import { canPlayCard, cardBlockReason, remainingMs, reverseExhausted, type GameAction, type GameState, type PlayerId } from '../rules/game';
 import type { ActionKind } from '../rules/cards';
 import { CardBack, CardFace } from './Card';
 import { Piece, type PieceSet } from './pieces';
@@ -49,6 +49,8 @@ export function PlayerZone(props: Props) {
   const [confirmResign, setConfirmResign] = useState(false);
   const sideName = color === 'w' ? 'White' : 'Black';
   const low = ms < 30_000;
+  const reverseUsed = reverseExhausted(state, player);
+  const usedTip = 'Reverse used — one per player per game. Any Reverse drawn from now on is discarded and you draw again.';
 
   let body: React.ReactNode = null;
   if (promotion && active && !remote) {
@@ -146,7 +148,13 @@ export function PlayerZone(props: Props) {
         </div>
 
         <div className="zone-hand" aria-label="Held action cards">
-          {hand.length === 0 && <div className="hand-empty">No held cards</div>}
+          {hand.length === 0 && !reverseUsed && <div className="hand-empty">No held cards</div>}
+          {reverseUsed && (
+            <div className="hand-slot rev-used" title={usedTip} aria-label={usedTip} data-testid={`reverse-used-${player}`}>
+              <CardFace kind="reverse" size="sm" className="hand-card card-spent" />
+              <span className="rev-used-tag">USED</span>
+            </div>
+          )}
           {hand.map((c) => {
             if (isBot || props.hiddenCardIds?.has(c.id)) return <CardBack key={c.id} size="sm" className="hand-card" />;
             if (remote) return <CardFace key={c.id} kind={c.kind} size="sm" className="hand-card" />;
@@ -186,7 +194,7 @@ export function PlayerZone(props: Props) {
           <div className={`avatar avatar-${color}`}><Piece piece={color === 'w' ? 'K' : 'k'} set={pieceSet} /></div>
           <div>
             <div className="zone-name">{state.players[player].name}{isBot && <span className="bot-tag">BOT</span>}{props.badge}</div>
-            <div className="zone-side">{sideName} · {hand.length} held</div>
+            <div className="zone-side">{sideName} · {hand.length} held{reverseUsed && <span className="rev-used-mini" title={usedTip}> · ⇄ used</span>}</div>
           </div>
         </div>
         {!remote && (props.onPause || props.onResign) && state.phase !== 'over' && (

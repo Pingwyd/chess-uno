@@ -42,7 +42,7 @@ interface Props {
   onReview?: (src: ReplaySource, tab?: 'replay' | 'review') => void;
 }
 
-interface Reveal { key: number; kind: CardKind; toHand: boolean; capped: boolean; flip: boolean; hidden: boolean }
+interface Reveal { key: number; kind: CardKind; toHand: boolean; capped: boolean; flip: boolean; hidden: boolean; burned?: boolean }
 interface Banner { key: number; text: string; sub?: string; tone: 'skip' | 'reverse' | 'check' | 'info' }
 
 export function GameScreen(props: Props) {
@@ -108,6 +108,13 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
         case 'move':
           setAnim({ key: key.current++, from: e.move.from, to: e.move.to });
           if (e.san.includes('+') || e.san.includes('#')) sfx.check(); else if (e.move.captured) sfx.capture(); else sfx.move();
+          break;
+        case 'burnCard':
+          // Rules v2: a Reverse drawn after the player's one Reverse is dead — discarded, draw again.
+          if (e.from === 'deck') {
+            newReveals.push({ key: key.current++, kind: e.card.kind, toHand: true, capped: false, flip: pass && e.player === top, hidden: false, burned: true });
+            newBanner = { key: key.current++, text: 'Reverse discarded', sub: `${state.players[e.player].name} already used their Reverse — drawing again`, tone: 'info' };
+          }
           break;
         case 'playCard':
           if (e.card.kind === 'skip') {
@@ -299,14 +306,14 @@ function useMediaQuery(q: string) {
   return match;
 }
 
-function CardReveal({ reveal, pass }: { reveal: Reveal; pass: boolean }) {
+export function CardReveal({ reveal, pass }: { reveal: Reveal; pass: boolean }) {
   return (
-    <div className={`reveal ${reveal.flip ? 'reveal-flip' : ''} ${reveal.toHand ? 'reveal-hand' : ''} ${pass ? 'reveal-pass' : ''}`} key={reveal.key}>
+    <div className={`reveal ${reveal.flip ? 'reveal-flip' : ''} ${reveal.toHand ? 'reveal-hand' : ''} ${reveal.burned ? 'reveal-burned' : ''} ${pass ? 'reveal-pass' : ''}`} key={reveal.key}>
       <div className="reveal-card">
         {reveal.hidden ? <CardBack size="xl" /> : <CardFace kind={reveal.kind} size="xl" />}
       </div>
       <div className="reveal-label">
-        {reveal.hidden ? 'Action card — held in hand' : reveal.toHand ? 'Into your hand — draw again' : reveal.capped ? 'Opening turn: counts as 1' : `${reveal.kind} move${reveal.kind === '1' ? '' : 's'}`}
+        {reveal.burned ? 'Reverse already used — discarded, draw again' : reveal.hidden ? 'Action card — held in hand' : reveal.toHand ? 'Into your hand — draw again' : reveal.capped ? 'Opening turn: counts as 1' : `${reveal.kind} move${reveal.kind === '1' ? '' : 's'}`}
       </div>
     </div>
   );

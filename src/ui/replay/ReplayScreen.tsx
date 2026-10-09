@@ -420,7 +420,8 @@ function frameText(f: Frame, names: [string, string]): { text: string; tone: str
   const over = pick('gameOver');
   if (over) return { text: over.result.winner === null ? 'Draw' : `${names[over.result.winner]} wins`, tone: 'over' };
   const rev = pick('reverse');
-  if (rev) return { text: 'REVERSE! Sides swapped', tone: 'reverse' };
+  const burn = pick('burnCard');
+  if (rev) return { text: burn ? 'REVERSE! Sides swapped (their other Reverse is now dead)' : 'REVERSE! Sides swapped', tone: 'reverse' };
   const skipped = pick('skipped');
   const play = pick('playCard');
   if (play && play.card.kind === 'skip') return { text: `SKIP! ${names[play.player]} goes again`, tone: 'skip' };
@@ -433,6 +434,7 @@ function frameText(f: Frame, names: [string, string]): { text: string; tone: str
     const num = draws.find((d) => !d.toHand);
     const who = names[draws[0].player];
     const n = num ? `a ${num.card.kind}${num.capped ? ' (opening turn: 1 move)' : ''}` : '';
+    if (burn) return { text: `${who} drew a dead Reverse (already used) — discarded${n ? `, then ${n}` : ''}`, tone: 'draw' };
     if (!held.length) return { text: `${who} drew ${n}`, tone: 'draw' };
     return { text: `${who} drew ${held.join(' and ')} for the hand${n ? `, then ${n}` : ''}`, tone: 'draw' };
   }
@@ -578,6 +580,7 @@ function TurnList({ replay, fi, reviewByTurn, onGo }: { replay: Replay; fi: numb
                 {t.played.map((p, k) => <CardFace key={`p${k}`} kind={p} size="xs" />)}
                 {t.card && <CardFace kind={t.card} size="xs" />}
                 {t.toHand.length > 0 && <span className="tl-hand">+{t.toHand.length}</span>}
+                {!!t.burned?.length && <span className="tl-burn" title="Dead Reverse discarded (already used)">⇄✕</span>}
               </span>
               <span className="tl-moves">{t.skipped ? 'skipped' : t.played.includes('reverse') && !t.moves.length ? 'Reverse' : t.moves.join(' ')}{t.endedByCheck && t.moves.length && !t.moves[t.moves.length - 1].includes('#') ? '' : ''}</span>
               {r?.label && <LabelPill label={r.label} small />}
@@ -692,7 +695,7 @@ function LuckMeter({ review, names }: { review: GameReview; names: [string, stri
         {([0, 1] as PlayerId[]).map((p) => (
           <div key={p}>
             <b>{names[p]}</b>
-            <span>avg card <b>{review.players[p].avgCard?.toFixed(2) ?? '—'}</b> <small>(deck {EXPECTED_CARD.toFixed(2)})</small></span>
+            <span>avg card <b>{review.players[p].avgCard?.toFixed(2) ?? '—'}</b> <small>(deck {(review.expectedCard ?? EXPECTED_CARD).toFixed(2)})</small></span>
             <span>{review.players[p].actionCards} action card{review.players[p].actionCards === 1 ? '' : 's'}</span>
           </div>
         ))}

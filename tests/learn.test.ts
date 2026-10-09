@@ -229,3 +229,16 @@ describe('learning progress', () => {
     expect(s.rankedUnlocked).toBe(false);
   });
 });
+
+describe('rules v2 lesson demo', () => {
+  it('the once-per-game demo burns the drawn Reverse and draws a 2', async () => {
+    const { demoFrames } = await import('../src/learn/engine');
+    const { UNITS } = await import('../src/learn/content');
+    const step = UNITS.flatMap((u) => u.lessons).find((l) => l.id === 'e5')!.steps.find((s) => s.kind === 'explain' && s.title === 'One Reverse per game')!;
+    const frames = demoFrames((step as { demo: import('../src/learn/types').Demo }).demo);
+    const afterDraw = frames[1];
+    expect(afterDraw.events.some((e) => e.type === 'burnCard')).toBe(true);
+    expect(afterDraw.movesAllowed).toBe(2);
+    expect(frames).toHaveLength(4);
+  });
+});

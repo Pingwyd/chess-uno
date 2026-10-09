@@ -41,6 +41,8 @@ export interface Demo {
   /** Board orientation (default: side to move at the bottom). */
   bottom?: 'w' | 'b';
   reverseProtection?: number;
+  /** Reverses already played by [side to move, other] (rules v2: one per player per game). */
+  reversesUsed?: [number, number];
 }
 
 export interface Puzzle {

@@ -11,7 +11,7 @@ import {
   type GameAction, type GameConfig, type GameEvent, type GameResult, type GameState, type PlayerId, type PlayerInfo,
 } from '../rules/game';
 import type { Color, Move } from '../rules/chess';
-import type { ActionKind, CardKind } from '../rules/cards';
+import { RULES_VERSION, type ActionKind, type CardKind, type RulesVersion } from '../rules/cards';
 
 export type RecordMode = 'bot' | 'pass' | 'online';
 
@@ -73,11 +73,15 @@ export const newRecordId = () =>
 /** Fill in a random seed (and default players) so the config can be replayed exactly. */
 export function recordableConfig(cfg: GameConfig): RecordConfig {
   return {
+    rules: RULES_VERSION,
     ...cfg,
     seed: cfg.seed ?? Math.floor(Math.random() * 2 ** 31),
     players: cfg.players ?? [{ name: 'Player 1', kind: 'human' }, { name: 'Player 2', kind: 'human' }],
   };
 }
+
+/** The config to rebuild a record with. Records without `rules` predate rules v2 (old deck, unlimited Reverse). */
+export const gameConfigOf = (rec: GameRecord): GameConfig => ({ ...rec.config, rules: rec.config.rules ?? 1 });
 
 /** Attach card kinds to card actions (so the log is self-describing). */
 export function logEntry(state: GameState, action: GameAction, at: number): LoggedAction {
@@ -171,7 +175,7 @@ const kindOf = (a: GameAction, events: GameEvent[]): FrameKind => {
 
 /** Rebuild every state of a recorded game. Throws if an action is illegal (corrupt log). */
 export function reconstruct(rec: GameRecord): Replay {
-  let s = createGame(rec.config, rec.startedAt);
+  let s = createGame(gameConfigOf(rec), rec.startedAt);
   const frames: Frame[] = [{ state: { ...s, events: s.events.slice() }, at: rec.startedAt, action: null, kind: 'start', turn: 0 }];
   for (const e of rec.actions) {
     const turn = s.history.length - 1;
@@ -201,7 +205,7 @@ export function reconstruct(rec: GameRecord): Replay {
 }
 
 export function replayFinal(rec: GameRecord): GameState {
-  let s = createGame(rec.config, rec.startedAt);
+  let s = createGame(gameConfigOf(rec), rec.startedAt);
   for (const e of rec.actions) s = applyAction(s, resolveAction(s, e), e.at);
   return s;
 }
@@ -227,6 +231,8 @@ export interface ServerLog {
   graceMs?: number;
   startedAt?: number;
   players?: [PlayerInfo, PlayerInfo];
+  /** Rules version (log v3+); older logs are rules v1. */
+  rules?: RulesVersion;
   actions: { at: number; seat: PlayerId; action: GameAction }[];
   result: GameResult | null;
 }
@@ -245,6 +251,7 @@ export function fromServerLog(
       clockMs: log.clockMs,
       graceMs: log.graceMs ?? 1000,
       player0Color: log.player0Color,
+      rules: log.rules ?? 1,
       players: log.players ?? [{ name: meta.names[0], kind: 'human' }, { name: meta.names[1], kind: 'human' }],
     },
     startedAt,

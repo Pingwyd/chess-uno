@@ -319,7 +319,8 @@ export class Room {
   /** Full log for persistence / future replay & review. */
   exportLog() {
     return {
-      version: 2,
+      version: 3,
+      rules: this.state?.config.rules ?? null,
       seed: this.seed,
       player0Color: this.player0Color,
       clockMs: this.host.clockMs,

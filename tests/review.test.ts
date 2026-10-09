@@ -186,10 +186,25 @@ describe('replay reconstruction', () => {
     expect(last.kind).toBe('card');
     expect(last.state.events.some((e) => e.type === 'playCard' && e.card.kind === 'skip')).toBe(true);
   });
+  it('rebuilds pre-v2 records (no rules field) with the old deck and unlimited Reverse', () => {
+    const tr = new LocalTransport({ seed: 77, rules: 1, players: [{ name: 'A', kind: 'bot' }, { name: 'B', kind: 'bot' }] }, () => 1000);
+    for (let i = 0; i < 12; i++) {
+      const s = tr.getState();
+      const res = botStep(s, 'easy', () => 0.5);
+      if (Array.isArray(res)) { if (!res[0]) break; tr.send({ type: 'move', player: s.current, from: res[0].from, to: res[0].to, promotion: res[0].promotion }); }
+      else if (res) tr.send(res);
+    }
+    const { rules: _drop, ...oldConfig } = tr.config;
+    void _drop;
+    const rec: GameRecord = { v: 1, id: 'old', mode: 'bot', config: oldConfig as GameRecord['config'], startedAt: tr.startedAt, endedAt: 2000, actions: tr.log, result: null };
+    const rp = reconstruct(rec);
+    expect(strip(rp.final)).toEqual(strip(tr.getState()));
+    expect(rp.final.config.reverseLimit).toBeNull();
+  });
   it('converts a server log (online games) into a replayable record', () => {
     const rec = fromServerLog({
       v: 2, seed: game.rec.config.seed, clockMs: game.rec.config.clockMs ?? 600_000, graceMs: game.rec.config.graceMs ?? 1000,
-      player0Color: 'w', startedAt: game.rec.startedAt, players: game.rec.config.players,
+      player0Color: 'w', startedAt: game.rec.startedAt, players: game.rec.config.players, rules: 2,
       actions: game.rec.actions.map((a) => ({ at: a.at, seat: 0, action: a.action })), result: game.rec.result,
     } as never, { gameId: 'g1', code: 'ABCDEF', rated: false, names: ['Ada', 'Bo'], createdAt: new Date(game.rec.startedAt).toISOString(), endedAt: null });
     expect(rec.mode).toBe('online');

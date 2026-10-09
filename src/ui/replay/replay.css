@@ -180,3 +180,4 @@
 @media (prefers-reduced-motion: reduce) {
   .event-chip, .coach, .luck-needle { animation: none; transition: none; }
 }
+.tl-burn { font-size: 10px; color: #ff8fa3; font-weight: 800; }

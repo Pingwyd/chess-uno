@@ -582,3 +582,13 @@ button:disabled { cursor: default; }
 .recent-del { flex: none; width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--panel-line); background: rgba(255, 255, 255, 0.04); color: var(--muted); }
 .panel.recent-panel { width: min(520px, calc(100vw - 24px)); text-align: left; }
 .recent-panel h2 { margin: 0; }
+
+/* ---------- Rules v2: spent Reverse (one per player per game) */
+.rev-used { position: relative; display: grid; place-items: center; cursor: help; }
+.card-spent { filter: grayscale(1) brightness(0.55); opacity: 0.75; }
+.rev-used-tag { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%) rotate(-14deg); padding: 1px 6px; border-radius: 6px; font-size: 10px; font-weight: 900; letter-spacing: 0.08em;
+  color: #ffd3dc; background: rgba(170, 20, 60, 0.85); border: 1px solid rgba(255, 255, 255, 0.35); pointer-events: none; }
+.rev-used-mini { color: var(--muted); }
+.burn-note { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); white-space: nowrap; font-size: 12px; font-weight: 800; color: #ffb3c1; text-shadow: 0 1px 4px #000; }
+.reveal-burned .reveal-card { filter: grayscale(1) brightness(0.6) drop-shadow(0 0 24px rgba(255, 84, 112, 0.6)); }
+.reveal-burned .reveal-label { color: #ffb3c1; }

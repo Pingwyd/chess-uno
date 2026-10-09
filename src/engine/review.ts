@@ -15,12 +15,12 @@ import {
   type Color, type Move, type Position, hasLegalMove, inCheck, legalMoves, makeMove, moveToSan, other, typeOf, FLAG_CAPTURE,
 } from '../rules/chess';
 import type { GameState, PlayerId } from '../rules/game';
-import type { ActionKind, CardKind } from '../rules/cards';
+import { numberOdds, type ActionKind, type CardKind, type NumberKind } from '../rules/cards';
 import { MATE, scoreAfterTurn, searchTurn, type LevelParams, type Line, type SearchCtx } from './bot';
 import { evaluate, VALUE } from './evaluate';
 import { reconstruct, type Frame, type GameRecord, type Replay } from '../replay/record';
 
-export const REVIEW_VERSION = 2;
+export const REVIEW_VERSION = 3;
 
 /** Deeper than the hardest bot: wider beams, full 2-move replies, no noise. */
 export const ANALYSIS: LevelParams = { beam: 9, tactical: 10, reply: 2, replyBeam: 6, noise: 0, blunder: 0 };
@@ -36,9 +36,10 @@ export const LABEL_TEXT: Record<Label, string> = {
 /** Upper bounds on win-chance loss (percentage points) for each label. */
 export const THRESHOLDS = { best: 2, good: 5, inaccuracy: 10, mistake: 20 } as const;
 
-/** Deck odds of each number card (18×1, 15×2, 9×3). */
-export const CARD_ODDS: Record<'1' | '2' | '3', number> = { '1': 18 / 42, '2': 15 / 42, '3': 9 / 42 };
+/** Deck odds of each number card for the current rules (v2: 19×1, 18×2, 5×3). Old games use their own rules' odds. */
+export const CARD_ODDS: Record<NumberKind, number> = numberOdds();
 export const EXPECTED_CARD = 1 * CARD_ODDS['1'] + 2 * CARD_ODDS['2'] + 3 * CARD_ODDS['3'];
+type Odds = Record<NumberKind, number>;
 
 // ---------------------------------------------------------------- scoring helpers
 
@@ -152,9 +153,9 @@ export function bestTurn(pos: Position, color: Color, n: number, ctxs: Contexts,
 }
 
 /** Value of a position for the side to move before it has drawn (expected over the number cards). */
-export function toMoveValue(pos: Position, color: Color, ctxs: Contexts): number {
+export function toMoveValue(pos: Position, color: Color, ctxs: Contexts, odds: Odds = CARD_ODDS): number {
   let v = 0;
-  for (const c of ['1', '2', '3'] as const) v += CARD_ODDS[c] * clampCp(bestTurn(pos, color, Number(c), ctxs, c !== '1').score);
+  for (const c of ['1', '2', '3'] as const) v += odds[c] * clampCp(bestTurn(pos, color, Number(c), ctxs, c !== '1').score);
   return v;
 }
 
@@ -231,7 +232,7 @@ export interface TurnReview {
 export interface PlayerReview {
   accuracy: number | null;
   counts: Record<Label, number>;
-  /** Average number card drawn vs the deck's ≈1.79. */
+  /** Average number card drawn vs the deck's expected value (≈1.67 v2, ≈1.79 v1). */
   avgCard: number | null;
   numberCards: number;
   actionCards: number;
@@ -247,6 +248,8 @@ export interface GameReview {
   keyMoments: number[];
   /** Player 0's evaluation after each turn, starting at 0. */
   graph: { turn: number; value: number; frame: number }[];
+  /** Average moves per number card for this game's deck (luck meter baseline). */
+  expectedCard: number;
   ms: number;
 }
 
@@ -270,6 +273,9 @@ const stateBefore = (replay: Replay, frameIndex: number): GameState => replay.fr
 /** Analyse a whole game. Synchronous; call it from a worker. */
 export function reviewGame(record: GameRecord, onProgress?: Progress, replay = reconstruct(record)): GameReview {
   const t0 = Date.now();
+  // Records without a rules version predate rules v2 (old deck, unlimited Reverse).
+  const odds = numberOdds(record.config.rules ?? 1);
+  const expectedCard = odds['1'] + 2 * odds['2'] + 3 * odds['3'];
   const ctxs = newContexts(ANALYSIS);
   const luckCtxs = newContexts(LUCK);
   const history = replay.final.history;
@@ -299,7 +305,7 @@ export function reviewGame(record: GameRecord, onProgress?: Progress, replay = r
     // ------------------------------------------------ Reverse (the whole turn)
     if (rec.played.includes('reverse')) {
       const pos = startState.pos;
-      const v = clampCp(toMoveValue(pos, color, ctxs));
+      const v = clampCp(toMoveValue(pos, color, ctxs, odds));
       // Not reversing keeps value v; reversing hands the side to move to the opponent: −v.
       const loss = Math.max(-100, winChance(v) - winChance(-v));
       const gainPct = winChance(-v) - winChance(beforeMover);
@@ -313,7 +319,8 @@ export function reviewGame(record: GameRecord, onProgress?: Progress, replay = r
       turns.push({
         ...base, label, loss: Math.max(0, loss), accuracy: accuracyFromLoss(Math.max(0, loss)), scoreBest: Math.max(v, -v), scoreActual: after,
         evalAfter: clampCp(p0Eval), winAfter: winChance(after), flags,
-        text: flags[0]?.text ?? (loss <= 0 ? 'Reverse kept things level.' : 'Drawing a card instead of Reversing was slightly better.'),
+        text: (flags[0]?.text ?? (loss <= 0 ? 'Reverse kept things level.' : 'Drawing a card instead of Reversing was slightly better.'))
+          + (startState.config.reverseLimit === 1 ? (loss > THRESHOLDS.good ? ' And that was your only Reverse of the game.' : ' (Your one Reverse for the game.)') : ''),
       });
       return;
     }
@@ -398,7 +405,7 @@ export function reviewGame(record: GameRecord, onProgress?: Progress, replay = r
     if (!rec.capped) {
       const by = { '1': 0, '2': 0, '3': 0 } as Record<'1' | '2' | '3', number>;
       for (const c of ['1', '2', '3'] as const) by[c] = winChance(c === rec.card && n === Number(c) ? best.score : bestTurn(pos, color, Number(c), luckCtxs, true).score);
-      const exp = by['1'] * CARD_ODDS['1'] + by['2'] * CARD_ODDS['2'] + by['3'] * CARD_ODDS['3'];
+      const exp = by['1'] * odds['1'] + by['2'] * odds['2'] + by['3'] * odds['3'];
       luck = by[rec.card as '1' | '2' | '3'] - exp;
     }
 
@@ -441,7 +448,7 @@ export function reviewGame(record: GameRecord, onProgress?: Progress, replay = r
   const keyMoments = swings.filter((s) => s.swing >= 15).sort((a, b) => b.swing - a.swing).slice(0, 5).map((s) => s.i).sort((a, b) => a - b);
 
   const graph = [{ turn: -1, value: 0, frame: 0 }, ...turns.map((t) => ({ turn: t.turn, value: t.evalAfter, frame: t.frameEnd }))];
-  return { version: REVIEW_VERSION, turns, players, keyMoments, graph, ms: Date.now() - t0 };
+  return { version: REVIEW_VERSION, turns, players, keyMoments, graph, expectedCard, ms: Date.now() - t0 };
 }
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
