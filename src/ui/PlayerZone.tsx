@@ -22,6 +22,12 @@ interface Props {
   now: number;
   rotated: boolean;
   isBot: boolean;
+  /** Someone else controls this zone (online opponent, or any zone when spectating). */
+  remote?: boolean;
+  /** Card ids whose faces this viewer may not see. */
+  hiddenCardIds?: Set<number>;
+  /** Extra tags next to the name (rating, connection status…). */
+  badge?: React.ReactNode;
   compact?: boolean;
   pieceSet: PieceSet;
   dispatch: (a: GameAction) => boolean;
@@ -34,6 +40,7 @@ interface Props {
 
 export function PlayerZone(props: Props) {
   const { state, player, now, rotated, isBot, compact, pieceSet, dispatch, promotion } = props;
+  const remote = isBot || !!props.remote;
   const color = state.colorOf[player];
   const active = state.current === player && state.phase !== 'over';
   const ms = remainingMs(state, player, now);
@@ -44,7 +51,7 @@ export function PlayerZone(props: Props) {
   const low = ms < 30_000;
 
   let body: React.ReactNode = null;
-  if (promotion && active && !isBot) {
+  if (promotion && active && !remote) {
     body = (
       <div className="zone-prompt">
         <div className="prompt-title">Promote to…</div>
@@ -58,7 +65,7 @@ export function PlayerZone(props: Props) {
         </div>
       </div>
     );
-  } else if (active && state.phase === 'overflow' && !isBot) {
+  } else if (active && state.phase === 'overflow' && !remote) {
     const newCard = state.overflowCard!;
     const canPlayNew = canPlayCard(state, player, newCard.kind as ActionKind);
     body = (
@@ -91,8 +98,8 @@ export function PlayerZone(props: Props) {
             </div>
           ) : (
             <button
-              className={`deck-btn ${active && state.phase === 'start' && !isBot ? 'deck-ready' : ''}`}
-              disabled={!active || state.phase !== 'start' || isBot || state.paused}
+              className={`deck-btn ${active && state.phase === 'start' && !remote ? 'deck-ready' : ''}`}
+              disabled={!active || state.phase !== 'start' || remote || state.paused}
               onClick={() => dispatch({ type: 'draw', player })}
               aria-label="Draw a card"
             >
@@ -123,8 +130,8 @@ export function PlayerZone(props: Props) {
             </>
           ) : active && state.phase === 'start' ? (
             <>
-              <div className="status-main">{isBot ? 'Drawing…' : 'Your turn'}</div>
-              <div className="status-sub">{isBot ? '' : hand.length ? 'Play a held card, or tap the deck' : 'Tap the deck to draw'}</div>
+              <div className="status-main">{isBot ? 'Drawing…' : remote ? 'Their turn' : 'Your turn'}</div>
+              <div className="status-sub">{remote ? '' : hand.length ? 'Play a held card, or tap the deck' : 'Tap the deck to draw'}</div>
             </>
           ) : active ? (
             <div className="status-main">Deciding…</div>
@@ -141,7 +148,8 @@ export function PlayerZone(props: Props) {
         <div className="zone-hand" aria-label="Held action cards">
           {hand.length === 0 && <div className="hand-empty">No held cards</div>}
           {hand.map((c) => {
-            if (isBot) return <CardBack key={c.id} size="sm" className="hand-card" />;
+            if (isBot || props.hiddenCardIds?.has(c.id)) return <CardBack key={c.id} size="sm" className="hand-card" />;
+            if (remote) return <CardFace key={c.id} kind={c.kind} size="sm" className="hand-card" />;
             const kind = c.kind as ActionKind;
             const playable = active && state.phase === 'start' && canPlayCard(state, player, kind) && !state.paused;
             const reason = active && state.phase === 'start' ? cardBlockReason(state, player, kind) : null;
@@ -177,11 +185,11 @@ export function PlayerZone(props: Props) {
         <div className="zone-id">
           <div className={`avatar avatar-${color}`}><Piece piece={color === 'w' ? 'K' : 'k'} set={pieceSet} /></div>
           <div>
-            <div className="zone-name">{state.players[player].name}{isBot && <span className="bot-tag">BOT</span>}</div>
+            <div className="zone-name">{state.players[player].name}{isBot && <span className="bot-tag">BOT</span>}{props.badge}</div>
             <div className="zone-side">{sideName} · {hand.length} held</div>
           </div>
         </div>
-        {!isBot && (props.onPause || props.onResign) && state.phase !== 'over' && (
+        {!remote && (props.onPause || props.onResign) && state.phase !== 'over' && (
           <div className="zone-menu">
             {props.onPause && <button className="icon-btn" onClick={props.onPause} aria-label="Pause">❚❚</button>}
             {props.onResign && (confirmResign ? (

@@ -11,6 +11,7 @@ interface Props {
   onPieceSet: (s: PieceSet) => void;
   onSound: (on: boolean) => void;
   onStart: (setup: GameSetup) => void;
+  onOnline: () => void;
 }
 
 const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
@@ -19,7 +20,7 @@ const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
   { id: 'hard', name: 'Rook', blurb: 'Hard', piece: 'R' },
 ];
 
-export function Home({ pieceSet, sound, onPieceSet, onSound, onStart }: Props) {
+export function Home({ pieceSet, sound, onPieceSet, onSound, onStart, onOnline }: Props) {
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
   const [rules, setRules] = useState(false);
@@ -81,13 +82,13 @@ export function Home({ pieceSet, sound, onPieceSet, onSound, onStart }: Props) {
           <button className="btn primary wide" onClick={startBot} data-testid="start-bot">Play vs {LEVELS.find((l) => l.id === level)!.name} Bot</button>
         </div>
 
-        <div className="mode-card mode-online disabled" aria-disabled="true">
+        <button className="mode-card mode-online" onClick={onOnline} data-testid="mode-online">
           <div className="mode-icon">◎</div>
           <div>
-            <h2>Online <span className="soon">Coming soon</span></h2>
-            <p>Quick Match, friend invites, live games and the leaderboard.</p>
+            <h2>Online</h2>
+            <p>Quick Match, invite a friend by link or code, watch live games.</p>
           </div>
-        </div>
+        </button>
       </div>
 
       <div className="home-foot">

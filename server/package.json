@@ -1,0 +1,27 @@
+{
+  "name": "@chess-uno/server",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Authoritative Chess Uno game server (HTTP + WebSocket).",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "test": "vitest run --root .",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^3.0.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^11.10.0",
+    "jose": "^6.2.12",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.1",
+    "ws": "^8.22.0"
+  }
+}

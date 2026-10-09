@@ -2,8 +2,8 @@
  * Transport seam for future online play. The UI only talks to a GameTransport:
  * - LocalTransport (today): applies actions with the shared rules reducer on-device
  *   (Pass & Play, vs. Bot, offline).
- * - A future SocketTransport will send action intents to the authoritative server
- *   (design doc §11.2) and receive state snapshots; the UI stays unchanged.
+ * - OnlineTransport (src/net/online.ts) sends action intents to the authoritative
+ *   server (design doc §11.2) and renders the snapshots it receives.
  */
 import { applyAction, createGame, type GameAction, type GameConfig, type GameState } from '../rules/game';
 
@@ -12,6 +12,8 @@ export interface GameTransport {
   /** Send an action; resolves to an error message if it was rejected. */
   send(action: GameAction): string | null;
   subscribe(listener: (s: GameState) => void): () => void;
+  /** Clock source for display (server-synchronised for online games). */
+  now?(): number;
 }
 
 export class LocalTransport implements GameTransport {
