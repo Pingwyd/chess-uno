@@ -13,7 +13,7 @@ export const unit2: Unit = {
       steps: [
         {
           kind: 'explain', title: 'Every turn starts with a card',
-          text: 'Tap the deck at the start of your turn. A **1, 2 or 3** means you make **that many moves in a row**. Low cards are more common: the 52-card deck has eighteen 1s, fifteen 2s and nine 3s, plus Skip and Reverse cards.',
+          text: 'Tap the deck at the start of your turn. A **1, 2 or 3** means you make **that many moves in a row**. Low cards are more common: the 52-card deck has nineteen 1s, eighteen 2s and only five 3s (about 1.7 moves per number card), plus Skip and Reverse cards.',
           cards: ['1', '2', '3'],
         },
         {

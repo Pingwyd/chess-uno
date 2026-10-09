@@ -232,6 +232,7 @@ export function createDemoGame(d: Demo): GameState {
     reverseProtectionTurns: d.reverseProtection ?? 0,
   }, NOW);
   if (d.hands) s.hands = [toCards(d.hands[0]), toCards(d.hands[1])];
+  if (d.reversesUsed) s.reversesUsed = [...d.reversesUsed];
   return s;
 }
 

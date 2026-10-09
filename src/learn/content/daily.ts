@@ -44,7 +44,7 @@ export const DAILY_PUZZLES: Puzzle[] = [
   {
     id: 'dly-reverse', prompt: 'You are White, a queen and rook down. You hold a Reverse.',
     fen: '3qk3/3r4/8/8/8/8/6PP/6K1 w - - 0 1', hand: ['reverse'], cards: ['1'], goals: [{ type: 'lead', min: 5 }],
-    solution: ['reverse'], hint: 'Swap armies!', explain: 'Reverse — and the big army is yours.',
+    solution: ['reverse'], hint: 'Swap armies!', explain: 'Reverse — your one swap of the game, and the big army is yours.',
   },
   {
     id: 'dly-quiet', prompt: 'You drew a 2. Win the queen without wasting a move on check.',

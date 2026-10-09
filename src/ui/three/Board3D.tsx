@@ -9,7 +9,7 @@ import { OrbitControls, PerformanceMonitor, Sparkles } from '@react-three/drei';
 import { BloomEffect, EffectComposer, EffectPass, RenderPass, VignetteEffect } from 'postprocessing';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { colorOfPiece, typeOf, type Color } from '../../rules/chess';
-import type { BoardProps } from '../Board';
+import type { BoardArrow, BoardProps } from '../Board';
 import { useBoardInteraction } from '../useBoardInteraction';
 import { cameraPreset, homeAzimuth, pieceYaw, squareToWorld, trackPieces, type CameraPreset, type TrackedPiece } from './mapping';
 import { PIECE_HEIGHT, pieceGeometry, type Set3D } from './pieceGeometry';
@@ -61,6 +61,7 @@ export default function Board3D(props: BoardProps) {
         <Highlights state={state} ia={ia} />
         <Pieces state={state} set={set} bottomColor={bottomColor} faceTop={faceTopPieces} anim={anim} ia={ia} reduced={reduced} />
         <Badges state={state} ia={ia} />
+        {props.arrows && props.arrows.length > 0 && <Arrows3D arrows={props.arrows} />}
         {!reduced && (
           <>
             <Sparkles count={36} scale={[13, 3.5, 13]} position={[0, 1.6, 0]} size={2.2} speed={0.25} opacity={0.55} color="#ffc27a" />
@@ -489,6 +490,73 @@ function Badges({ state, ia }: { state: BoardProps['state']; ia: Interaction }) 
         );
       })}
     </>
+  );
+}
+
+// ------------------------------------------------------------ analysis arrows
+
+const ARROW_COLOR: Record<BoardArrow['tone'], string> = { best: '#3ee08f', played: '#ff6b5a', threat: '#ffb02e' };
+const headGeometry = (() => {
+  const sh = new THREE.Shape();
+  sh.moveTo(0, 0.24); sh.lineTo(-0.25, -0.14); sh.lineTo(0.25, -0.14); sh.lineTo(0, 0.24);
+  return new THREE.ShapeGeometry(sh);
+})();
+const labelTextures = new Map<string, THREE.Texture>();
+function arrowLabelTexture(text: string, tone: BoardArrow['tone']) {
+  const key = `${text}${tone}`;
+  const hit = labelTextures.get(key);
+  if (hit) return hit;
+  const c = document.createElement('canvas');
+  c.width = c.height = 96;
+  const g = c.getContext('2d')!;
+  g.beginPath();
+  g.arc(48, 48, 38, 0, Math.PI * 2);
+  g.fillStyle = ARROW_COLOR[tone];
+  g.fill();
+  g.fillStyle = '#0c1a12';
+  g.font = '900 50px Nunito, system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 48, 52);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  labelTextures.set(key, t);
+  return t;
+}
+
+/** Glowing flat arrows on the board surface for the review's better line / played moves. */
+function Arrows3D({ arrows }: { arrows: BoardArrow[] }) {
+  return (
+    <group>
+      {arrows.map((a, i) => {
+        const [x1, z1] = squareToWorld(a.from);
+        const [x2, z2] = squareToWorld(a.to);
+        const dx = x2 - x1, dz = z2 - z1;
+        const len = Math.hypot(dx, dz) || 1;
+        const ux = dx / len, uz = dz / len;
+        const start = 0.2, end = len - 0.32;
+        const shaft = Math.max(0.05, end - start);
+        const yaw = Math.atan2(dx, dz);
+        const color = new THREE.Color(ARROW_COLOR[a.tone]).multiplyScalar(1.8);
+        const y = 0.03 + i * 0.002;
+        return (
+          <group key={i}>
+            <mesh position={[x1 + ux * (start + shaft / 2), y, z1 + uz * (start + shaft / 2)]} rotation={[-Math.PI / 2, 0, yaw + Math.PI]} raycast={noRay} renderOrder={6}>
+              <planeGeometry args={[0.2, shaft]} />
+              <meshBasicMaterial color={color} toneMapped={false} transparent opacity={0.85} depthWrite={false} />
+            </mesh>
+            <mesh geometry={headGeometry} position={[x1 + ux * (end + 0.1), y + 0.001, z1 + uz * (end + 0.1)]} rotation={[-Math.PI / 2, 0, yaw + Math.PI]} raycast={noRay} renderOrder={6}>
+              <meshBasicMaterial color={color} toneMapped={false} transparent opacity={0.92} depthWrite={false} side={THREE.DoubleSide} />
+            </mesh>
+            {a.label && (
+              <sprite position={[x2 + 0.28, 0.55, z2 - 0.28]} scale={[0.46, 0.46, 1]} renderOrder={11} raycast={noRay}>
+                <spriteMaterial map={arrowLabelTexture(a.label, a.tone)} depthTest={false} depthWrite={false} transparent toneMapped={false} />
+              </sprite>
+            )}
+          </group>
+        );
+      })}
+    </group>
   );
 }
 

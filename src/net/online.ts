@@ -12,6 +12,18 @@ export const SERVER_URL: string = (import.meta.env.VITE_SERVER_URL as string | u
 const WS_URL = SERVER_URL.replace(/^http/, 'ws') + '/ws';
 const TOKEN_KEY = 'cu.token';
 
+export interface MyOnlineGame {
+  gameId: string;
+  rated: boolean;
+  seat: 0 | 1;
+  players: [string, string];
+  colors: ['w' | 'b', 'w' | 'b'];
+  winner: 0 | 1 | null;
+  reason: string;
+  endedAt: number;
+  turns: number;
+}
+
 // ---------------------------------------------------------------- REST
 
 async function call(path: string, body?: unknown, token?: string | null): Promise<{ token?: string; user: PublicUser }> {
@@ -114,6 +126,12 @@ export class OnlineClient {
       const { user } = await call('/api/me', undefined, token);
       this.update({ user });
     } catch { /* ignore */ }
+  }
+
+  /** Your finished online games, newest first (server-side history). */
+  async myGames(): Promise<MyOnlineGame[]> {
+    const res = (await call('/api/my/games', undefined, storedToken())) as unknown as { games: MyOnlineGame[] };
+    return res.games ?? [];
   }
 
   async leaderboard(): Promise<PublicUser[]> {

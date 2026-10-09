@@ -10,9 +10,21 @@ import type { GameSetup } from './useGame';
 import type { LearnTab } from './learn/LearnScreen';
 import { useProgress } from '../learn/store';
 import { setActiveSkins } from './skins';
+import type { ReplaySource } from './replay/ReplayScreen';
 
 // The learning path (lessons, puzzles, path map) is its own chunk, loaded on first visit.
 const LearnScreen = lazy(() => import('./learn/LearnScreen'));
+// Replay viewer + review bot: its own chunk too (the analysis itself runs in a worker).
+const ReplayScreen = lazy(() => import('./replay/ReplayScreen'));
+
+interface ReplayView { src: ReplaySource; tab?: 'replay' | 'review'; back: 'home' | 'online' }
+
+/** `?replay=<gameId>` opens a shared online replay. */
+const urlReplay = (() => {
+  if (typeof location === 'undefined') return null;
+  const v = new URLSearchParams(location.search).get('replay');
+  return v && /^[\w-]{6,64}$/.test(v) ? v : null;
+})();
 
 const load = <T,>(k: string, d: T): T => {
   try {
@@ -51,6 +63,7 @@ const clearUrlIntent = () => {
 export function App() {
   const [setup, setSetup] = useState<GameSetup | null>(null);
   const [online, setOnline] = useState<boolean>(!!urlIntent);
+  const [replay, setReplay] = useState<ReplayView | null>(() => (urlReplay ? { src: { gameId: urlReplay }, back: 'home' } : null));
   const [learn, setLearn] = useState<LearnTab | null>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).has('learn') ? 'path' : null));
   const progress = useProgress();
   setActiveSkins(progress.skins);
@@ -68,7 +81,23 @@ export function App() {
     <div className={`app skin-w-${progress.skins.w} skin-b-${progress.skins.b}`}>
       <PieceDefs />
       <div className="bg-sparks" aria-hidden="true" />
-      {learn ? (
+      {replay ? (
+        <Suspense fallback={<div className="learn-loading">Loading replay…</div>}>
+          <ReplayScreen
+            source={replay.src}
+            initialTab={replay.tab}
+            pieceSet={pieceSet}
+            boardMode={boardMode}
+            onToggleBoard={toggleBoard}
+            onBoardUnavailable={() => setBoardMode('2d')}
+            onClose={() => {
+              if (urlReplay) { const u = new URL(location.href); u.searchParams.delete('replay'); history.replaceState(null, '', u.toString()); }
+              setOnline(replay.back === 'online');
+              setReplay(null);
+            }}
+          />
+        </Suspense>
+      ) : learn ? (
         <Suspense fallback={<div className="learn-loading">Opening the path…</div>}>
           <LearnScreen
             initialTab={learn}
@@ -87,6 +116,7 @@ export function App() {
           onTogglePieces={() => setPieceSet((p) => (p === 'arcane' ? 'classic' : 'arcane'))}
           onHome={() => setOnline(false)}
           intent={urlIntent}
+          onReplay={(src, tab) => setReplay({ src, tab, back: 'online' })}
         />
       ) : setup ? (
         <GameScreen
@@ -96,9 +126,10 @@ export function App() {
           onToggleBoard={toggleBoard}
           onTogglePieces={() => setPieceSet((p) => (p === 'arcane' ? 'classic' : 'arcane'))}
           onHome={() => setSetup(null)}
+          onReview={(src, tab) => { setSetup(null); setReplay({ src, tab, back: 'home' }); }}
         />
       ) : (
-        <Home pieceSet={pieceSet} sound={sound} boardMode={boardMode} onBoardMode={setBoardMode} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} onLearn={(t) => setLearn(t)} />
+        <Home pieceSet={pieceSet} sound={sound} boardMode={boardMode} onBoardMode={setBoardMode} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} onLearn={(t) => setLearn(t)} onReplay={(src, tab) => setReplay({ src, tab, back: 'home' })} />
       )}
     </div>
   );

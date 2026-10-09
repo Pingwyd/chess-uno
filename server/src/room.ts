@@ -62,6 +62,7 @@ export class Room {
   /** Authoritative state at the start of each turn (for delayed spectating). */
   private turnStarts: GameState[] = [];
   private lastTurnNumber = -1;
+  private startedAt = 0;
 
   constructor(readonly code: string, readonly rated: boolean, private host: RoomHost) {}
 
@@ -80,6 +81,7 @@ export class Room {
   async start() {
     const [a, b] = this.seats as [Seat, Seat];
     const now = this.host.now();
+    this.startedAt = now;
     this.state = createGame({
       seed: this.seed,
       clockMs: this.host.clockMs,
@@ -205,7 +207,11 @@ export class Room {
     const waitMs = Math.max(5, rem + 15 + Math.max(0, (this.state.clockSince ?? 0) - this.host.now()));
     this.clockTimer = setTimeout(() => {
       if (!this.state || this.status !== 'playing') return;
-      const next = applyAction(this.state, { type: 'tick' }, this.host.now());
+      const at = this.host.now();
+      const before = this.state;
+      const next = applyAction(before, { type: 'tick' }, at);
+      // Log ticks that change something (flag fall) so replays rebuild the exact ending.
+      if (next !== before && next.phase === 'over') this.actions.push({ at, seat: before.current, action: { type: 'tick' } });
       if (next !== this.state) this.setState(next);
       else this.scheduleClock();
     }, waitMs);
@@ -313,10 +319,14 @@ export class Room {
   /** Full log for persistence / future replay & review. */
   exportLog() {
     return {
-      version: 1,
+      version: 3,
+      rules: this.state?.config.rules ?? null,
       seed: this.seed,
       player0Color: this.player0Color,
       clockMs: this.host.clockMs,
+      graceMs: this.state?.config.graceMs ?? 1000,
+      startedAt: this.startedAt,
+      players: this.state?.players ?? null,
       actions: this.actions,
       history: this.state?.history ?? [],
       result: this.state?.result ?? null,

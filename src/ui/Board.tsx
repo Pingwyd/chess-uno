@@ -10,6 +10,15 @@ export interface LastMoveAnim {
   to: number;
 }
 
+/** An analysis arrow (replay/review): the engine's better line, the move played, or a threat. */
+export interface BoardArrow {
+  from: number;
+  to: number;
+  tone: 'best' | 'played' | 'threat';
+  /** Small number/label at the arrow head (e.g. move order 1, 2, 3). */
+  label?: string;
+}
+
 export interface BoardProps {
   state: GameState;
   bottomColor: Color;
@@ -21,9 +30,10 @@ export interface BoardProps {
   anim: LastMoveAnim | null;
   onMove: (from: number, to: number) => void;
   onPromotion: (from: number, to: number) => void;
+  arrows?: BoardArrow[];
 }
 
-export function Board({ state, bottomColor, faceTopPieces, topColor, interactive, pieceSet, anim, onMove, onPromotion }: BoardProps) {
+export function Board({ state, bottomColor, faceTopPieces, topColor, interactive, pieceSet, anim, onMove, onPromotion, arrows }: BoardProps) {
   // Cumulative rotation so the board always spins the same way on Reverse.
   const [angle, setAngle] = useState(bottomColor === 'w' ? 0 : 180);
   const prevBottom = useRef(bottomColor);
@@ -88,6 +98,7 @@ export function Board({ state, bottomColor, faceTopPieces, topColor, interactive
     <div className="board-frame">
       <div className="board" style={{ transform: `rotate(${angle}deg)` }}>
         {squares}
+        {arrows && arrows.length > 0 && <ArrowLayer arrows={arrows} angle={angle} />}
       </div>
     </div>
   );
@@ -107,4 +118,41 @@ function PieceSlot({ anim, children }: { anim: LastMoveAnim | null; children: Re
     );
   }, [anim]);
   return <div ref={ref} className="piece-slot">{children}</div>;
+}
+
+const center = (sq: number): [number, number] => [fileOf(sq) + 0.5, 7 - rankOf(sq) + 0.5];
+
+/** SVG arrows over the squares (rotates with the board; labels stay upright). */
+export function ArrowLayer({ arrows, angle }: { arrows: BoardArrow[]; angle: number }) {
+  return (
+    <svg className="board-arrows" viewBox="0 0 8 8" aria-hidden="true" data-testid="board-arrows">
+      <defs>
+        {(['best', 'played', 'threat'] as const).map((t) => (
+          <marker key={t} id={`ah-${t}`} viewBox="0 0 10 10" refX="5.5" refY="5" markerWidth="3.1" markerHeight="3.1" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" className={`arrow-head arrow-${t}`} />
+          </marker>
+        ))}
+      </defs>
+      {arrows.map((a, i) => {
+        const [x1, y1] = center(a.from);
+        const [x2, y2] = center(a.to);
+        const len = Math.hypot(x2 - x1, y2 - y1) || 1;
+        const ux = (x2 - x1) / len, uy = (y2 - y1) / len;
+        // Start just off the piece, stop short so the head sits on the target square.
+        const sx = x1 + ux * 0.22, sy = y1 + uy * 0.22, ex = x2 - ux * 0.3, ey = y2 - uy * 0.3;
+        const lx = x2 - ux * 0.08, ly = y2 - uy * 0.08;
+        return (
+          <g key={i} className={`arrow arrow-${a.tone}`} style={{ animationDelay: `${i * 0.08}s` }}>
+            <line x1={sx} y1={sy} x2={ex} y2={ey} markerEnd={`url(#ah-${a.tone})`} />
+            {a.label && (
+              <g transform={`rotate(${-angle} ${lx} ${ly})`}>
+                <circle cx={lx + 0.27} cy={ly - 0.27} r="0.2" className="arrow-label-bg" />
+                <text x={lx + 0.27} y={ly - 0.27} className="arrow-label">{a.label}</text>
+              </g>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
 }

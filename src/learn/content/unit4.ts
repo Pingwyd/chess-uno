@@ -88,7 +88,7 @@ export const unit4: Unit = {
       steps: [
         {
           kind: 'explain', title: 'Swap sides',
-          text: '**Reverse** swaps colours: you take over your opponent’s army and they take yours. It **uses your turn** (no draw). The position stays the same and the **same colour moves next — now controlled by your opponent**.',
+          text: '**Reverse** swaps colours: you take over your opponent’s army and they take yours. It **uses your turn** (no draw). The position stays the same and the **same colour moves next — now controlled by your opponent**. Each player gets **only one Reverse per game**, so make it count.',
           demo: { fen: '1r2k3/8/8/8/8/3q4/6PP/7K w - - 0 1', hands: [['reverse'], []], actions: ['reverse', 'h2h3'] },
           cards: ['reverse'],
         },
@@ -119,6 +119,12 @@ export const unit4: Unit = {
           text: '**Opening protection:** no Reverse until **each player has finished 5 turns**. **No ping-pong:** you can’t Reverse on the turn right after your opponent did. **Clocks and hands stay with players**, not colours, and a pending Skip still targets the same player.',
           cards: ['reverse'],
         },
+        {
+          kind: 'explain', title: 'One Reverse per game',
+          text: 'Each player may play **one Reverse per game**. Once yours is used, any other Reverse in your hand is discarded, and any Reverse you **draw** later is discarded too — you simply **draw again** until you get a number. Your opponent still has their own Reverse to use.',
+          demo: { fen: '6k1/5ppp/8/8/8/8/5PPP/6K1 w - - 0 1', deck: ['reverse', '2'], reversesUsed: [1, 0], actions: ['draw', 'g1f1', 'f1e1'] },
+          cards: ['reverse'],
+        },
         { kind: 'puzzle', puzzle: {
           id: 'e5-locked', prompt: 'Only 3 turns each so far — your Reverse is still locked. You drew a 2: mate the old-fashioned way.',
           fen: '7k/8/5K2/8/8/8/8/1Q6 w - - 0 1', hand: ['reverse'], cards: ['2'], reverseProtection: 5, turnsDone: [3, 3], goals: [{ type: 'mate' }],
@@ -129,6 +135,11 @@ export const unit4: Unit = {
           kind: 'mcq', question: 'Your opponent just played Reverse. Can you Reverse straight back on your next turn?',
           options: ['Yes', 'No — no Reverse right after theirs', 'Only with a Skip', 'Only if in check'], answer: 1,
           explain: 'The anti-ping-pong rule. Wait one turn.',
+        },
+        {
+          kind: 'mcq', question: 'You already played your Reverse earlier this game, then draw another Reverse. What happens?',
+          options: ['It is discarded and you draw again', 'It goes into your hand for later', 'You must play it now', 'Your opponent gets it'], answer: 0,
+          explain: 'One Reverse per player per game. Extra Reverses are dead cards: discarded, and you draw again.', cards: ['reverse'],
         },
         {
           kind: 'mcq', question: 'You had 4:00 on your clock and Reverse. How much time do you have now?',

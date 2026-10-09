@@ -10,12 +10,13 @@
 import {
   type Color, type Move, type Position, hasLegalMove, inCheck, legalMoves, makeMove, other, placementFen, FLAG_CAPTURE,
 } from '../rules/chess';
-import { type GameState, type GameAction, type PlayerId, canPlayCard, currentColor } from '../rules/game';
+import { type GameState, type GameAction, type PlayerId, canPlayCard, currentColor, reverseExhausted } from '../rules/game';
+import { numberOdds } from '../rules/cards';
 import { evaluate, VALUE } from './evaluate';
 
 export type BotLevel = 'easy' | 'medium' | 'hard';
 
-interface LevelParams {
+export interface LevelParams {
   beam: number;          // quiet moves kept per ply of our own turn
   tactical: number;      // max checks/captures kept per ply
   reply: 0 | 1 | 2;      // opponent reply depth (moves) used to score our turn
@@ -34,7 +35,7 @@ const MATE = 100000;
 
 type Rand = () => number;
 
-interface SearchCtx {
+export interface SearchCtx {
   color: Color;
   params: LevelParams;
   cache: Map<string, number>;
@@ -44,7 +45,7 @@ interface SearchCtx {
 const posKey = (pos: Position) => placementFen(pos.board) + pos.castling;
 
 /** Score a position at the end of our turn, assuming the opponent moves next. */
-function scoreAfterTurn(pos: Position, ctx: SearchCtx): number {
+export function scoreAfterTurn(pos: Position, ctx: SearchCtx): number {
   const key = posKey(pos);
   const cached = ctx.cache.get(key);
   if (cached !== undefined) return cached;
@@ -64,7 +65,7 @@ function scoreAfterTurn(pos: Position, ctx: SearchCtx): number {
 
 /**
  * Opponent's best reply. With reply=2 we blend their best 1-move and 2-move
- * turns by the deck's odds (≈43% draw a 1, ≈57% draw 2+).
+ * turns by the deck's odds (rules v2: ≈45% draw a 1, ≈55% draw 2+).
  */
 function replyScore(pos: Position, ctx: SearchCtx): number {
   const me = ctx.color, them = other(me);
@@ -98,12 +99,15 @@ function replyScore(pos: Position, ctx: SearchCtx): number {
   }
   // Also look for their quiet-quiet-mate threats cheaply: any mate already found dominates.
   if (best2 <= -MATE) return -MATE * 0.6 + best1 * 0.4;
-  return 0.43 * best1 + 0.57 * best2;
+  return P_ONE * best1 + (1 - P_ONE) * best2;
 }
 
-interface Line { moves: Move[]; score: number }
+/** Chance the opponent's next number card is a 1 (current deck). */
+const P_ONE = numberOdds()['1'];
 
-function searchTurn(pos: Position, left: number, ctx: SearchCtx): Line {
+export interface Line { moves: Move[]; score: number }
+
+export function searchTurn(pos: Position, left: number, ctx: SearchCtx): Line {
   const me = ctx.color, them = other(me);
   const moves = legalMoves(pos, me);
   if (!moves.length) return { moves: [], score: scoreAfterTurn(pos, ctx) };
@@ -183,7 +187,11 @@ export function decideStart(state: GameState, level: BotLevel, rand: Rand = Math
   const ev = evaluate(state.pos.board, color);
   for (const card of hand) {
     if (card.kind !== 'reverse' || !canPlayCard(state, player, 'reverse')) continue;
-    const threshold = level === 'easy' ? -50 : level === 'medium' ? -250 : -180;
+    // Reverse is limited (v2: one per player per game), so save it for a clearly lost position.
+    // Hard bots are bolder once the opponent has used theirs: then nobody can swap back.
+    const opponentSpent = reverseExhausted(state, player === 0 ? 1 : 0);
+    const limited = state.config.reverseLimit !== null;
+    const threshold = level === 'easy' ? -50 : level === 'medium' ? (limited ? -300 : -250) : limited && !opponentSpent ? -260 : -180;
     if (ev <= threshold && (level !== 'easy' || rand() < 0.5)) return { type: 'playCard', player, cardId: card.id };
   }
   for (const card of hand) {
@@ -207,7 +215,7 @@ export function decideOverflow(state: GameState, level: BotLevel): GameAction {
   if (card.kind === 'skip' && canPlayCard(state, player, 'skip')) {
     return { type: 'resolveOverflow', player, choice: 'play' };
   }
-  if (card.kind === 'reverse' && canPlayCard(state, player, 'reverse') && ev <= (level === 'easy' ? 0 : -180)) {
+  if (card.kind === 'reverse' && canPlayCard(state, player, 'reverse') && ev <= (level === 'easy' ? 0 : state.config.reverseLimit !== null ? -260 : -180)) {
     return { type: 'resolveOverflow', player, choice: 'play' };
   }
   // Discard a Reverse when winning (we don't want to swap), otherwise discard the new card.

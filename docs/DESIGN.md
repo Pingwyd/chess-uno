@@ -51,14 +51,15 @@ Both players draw from **one shared 52-card deck**, weighted toward low numbers:
 
 | Card | Count | Share |
 |---|---|---|
-| 1 | 18 | 35% |
-| 2 | 15 | 29% |
-| 3 | 9 | 17% |
+| 1 | 19 | 37% |
+| 2 | 18 | 35% |
+| 3 | 5 | 10% |
 | Skip | 6 | 12% |
 | Reverse | 4 | 8% |
 | **Total** | **52** | |
 
-- A number card averages about **1.8 moves**.
+- A number card averages about **1.67 moves** (70 moves over 42 number cards). The chance of a 3 is about 12% per number card.
+- **Rules v2 (playtesting: "cards feel too swingy"):** the original mix was 18×1, 15×2, 9×3 (about 1.79 moves, 21% threes). v2 moves four 3s to one extra 1 and three extra 2s, so 2s are the backbone and big triple-move turns are rare. The deck is still 52 cards with 42 number cards.
 - Every drawn card is shown to both players. Players see how many cards are left in the draw pile and can view the discard pile.
 - When the draw pile runs out, the discard pile is **shuffled** into a new draw pile. The server does all shuffling (see §10).
 
@@ -69,7 +70,7 @@ Holding action cards gives players a real decision to make ("when should I use m
 - You can hold up to **2 action cards**. If you draw a third, you must either discard one or play the new card immediately.
 - At the **start of your turn, before drawing**, you can play **one** action card from your hand:
   - **Skip:** you draw and take your turn as usual. Your opponent's next turn is then skipped, and you draw again for another turn.
-  - **Reverse:** sides swap immediately and **this uses up your turn** (you don't draw). The position stays the same and the same color moves next, but your opponent now controls that color.
+  - **Reverse:** sides swap immediately and **this uses up your turn** (you don't draw). The position stays the same and the same color moves next, but your opponent now controls that color. **Each player may play only one Reverse per game** (see §2.8).
 - Your opponent can see **how many** action cards you hold, but not which ones.
 
 ### 2.5 Check, Checkmate, and Multi-Move Turns
@@ -108,6 +109,7 @@ White's **very first turn of the game is capped at 1 move**, whatever card is dr
 - **Board orientation (online):** both players' boards flip with an animation so your pieces are always at the bottom of your screen. You can turn this off in settings. In **Pass & Play**, players stay seated and the shared board re-orients instead (see §4.1).
 - **Anti-ping-pong:** you can't play a Reverse on the turn right after your opponent played one.
 - **Opening protection:** Reverse can't be played until **each player has finished 5 turns.**
+- **One Reverse per player per game (rules v2).** Once you've played your Reverse, any other Reverse in your hand is **discarded at once**, and any Reverse you **draw later is discarded and you draw again** (like drawing past an action card, but it never reaches your hand). Dead Reverses therefore never take up a hand slot or force an overflow choice. Your opponent keeps their own Reverse until they use it. The rules engine (and so the server) rejects a second Reverse, the hand shows a greyed "USED" Reverse chip with a tooltip, and the notation marks a discarded Reverse as `[Reverse✕]`.
 
 ### 2.9 Turn Notation
 Moves are recorded in an extended version of standard chess notation (PGN) that also logs cards. Example:
@@ -276,6 +278,8 @@ Every finished game can be replayed, and the replay **doubles as a review**:
   - Includes a **luck meter** that compares the cards each player drew with the average, so players can tell bad luck apart from bad play.
 - **"Try it yourself"** lets you replay a mistake position against the bot.
 
+> **Implementation note (review branch):** the review bot runs **on the device in a Web Worker** by default, so local games are reviewed offline. For online games the server runs the same analysis in a `worker_thread` and caches it (`game_reviews`). Labels add **Brilliant** and **Great** on top of Best–Blunder. Skip feedback compares the double turn with a normal one, and is not an endgame-holding heuristic. "Try it yourself" is not built yet. See the README section *Replays and review*.
+
 ---
 
 ## 10. Social Features
@@ -374,9 +378,9 @@ Every finished game can be replayed, and the replay **doubles as a review**:
 
 1. **Holding cards:** should action cards be held (the current proposal) or take effect immediately when drawn? If held, is a hand limit of 2 right?
 2. **Skip strength:** with Skip, you draw for your turn *and* take an extra turn. Is that too strong? An alternative is that Skip replaces this turn's moves.
-3. **Reverse rules:** is the 5-turn opening protection and the no-back-to-back rule enough, or should Reverse be limited per player (for example, once per game)?
+3. **Reverse rules:** *decided in rules v2:* once per player per game, plus the 5-turn opening protection and the no-back-to-back rule (§2.8).
 4. **Using all moves:** should players be forced to make every move (the current proposal), or allowed to pass leftover moves?
-5. **Deck mix:** is the 18/15/9/6/4 split right? Playtest data, such as average game length and luck-meter readings, will tell us.
+5. **Deck mix:** v2 changed 18/15/9/6/4 to **19/18/5/6/4** after playtesters found the cards too swingy. Keep watching average game length and luck-meter readings.
 6. **Clocks:** stay at 10+0 only, or add an increment (such as 10+2) and other time controls?
 7. **Rating system:** stay with plain Elo, or move to Glicko-2 for better accuracy with new players?
 8. **Ranked unlock:** can experienced chess players skip ahead with a placement test instead of finishing all 4 units?

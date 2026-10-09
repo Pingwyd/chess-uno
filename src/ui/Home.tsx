@@ -9,6 +9,7 @@ import { useProgress } from '../learn/store';
 import { OUTLINE_SHAPE as PATH_SHAPE, lessonTitle } from '../learn/outline';
 import { localDay, nextLesson, pathOrder, streak, utcDay } from '../learn/progress';
 import type { LearnTab } from './learn/LearnScreen';
+import { RecentGames, type OpenReplay } from './RecentGames';
 
 interface Props {
   pieceSet: PieceSet;
@@ -20,6 +21,7 @@ interface Props {
   onStart: (setup: GameSetup) => void;
   onOnline: () => void;
   onLearn: (tab: LearnTab) => void;
+  onReplay: OpenReplay;
 }
 
 const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
@@ -28,7 +30,7 @@ const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
   { id: 'hard', name: 'Rook', blurb: 'Hard', piece: 'R' },
 ];
 
-export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn }: Props) {
+export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn, onReplay }: Props) {
   const progress = useProgress();
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
@@ -102,6 +104,8 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
         </button>
       </div>
 
+      <RecentGames onOpen={onReplay} />
+
       <div className="home-foot">
         <div className="seg seg-small" role="radiogroup" aria-label="Piece set">
           <button className={`seg-btn ${pieceSet === 'arcane' ? 'on' : ''}`} onClick={() => onPieceSet('arcane')}>Arcane Forge</button>
@@ -121,12 +125,12 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
             <h2>How to play</h2>
             <ul>
               <li><b>Normal chess</b>, White first, 10 minutes each. Run out of time and you lose.</li>
-              <li>Start each turn by <b>drawing a card</b>: a <b>1, 2 or 3</b> means that many moves in a row.</li>
+              <li>Start each turn by <b>drawing a card</b>: a <b>1, 2 or 3</b> means that many moves in a row. 3s are rare: the 52-card deck has 19 ones, 18 twos and just 5 threes (about 1.7 moves a turn on average), plus 6 Skip and 4 Reverse.</li>
               <li><b>Giving check ends your turn</b> immediately. Set up quietly, then check on your last move.</li>
               <li>White's very first turn is capped at <b>1 move</b>.</li>
               <li><b>Skip</b> and <b>Reverse</b> go into your hand (max 2). Play one at the start of a turn, before drawing.</li>
               <li><b>Skip:</b> take your turn, then your opponent's next turn is skipped. Check cancels Skip.</li>
-              <li><b>Reverse:</b> swap sides with your opponent (uses your turn). Unlocks after 5 turns each.</li>
+              <li><b>Reverse:</b> swap sides with your opponent (uses your turn). Unlocks after 5 turns each, no Reverse straight back, and <b>only one Reverse per player per game</b>. After yours is used, any Reverse you draw is discarded and you draw again.</li>
             </ul>
             <button className="btn primary" onClick={() => setRules(false)}>Got it</button>
           </div>

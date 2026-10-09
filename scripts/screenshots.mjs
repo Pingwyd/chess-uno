@@ -45,7 +45,8 @@ async function humanStep(page, zoneSel = '.zone') {
   const n = await movable.count();
   if (!n) return 'idle';
   for (let tries = 0; tries < 6; tries++) {
-    await movable.nth(Math.floor(Math.random() * n)).click({ force: true });
+    // The board can change under us (bot reply, game over): treat a vanished square as an idle step.
+    if (!(await movable.nth(Math.floor(Math.random() * n)).click({ force: true, timeout: 3000 }).then(() => true, () => false))) return 'idle';
     const caps = page.locator('.sq-target-capture');
     const tgts = (await caps.count()) ? caps : page.locator('.sq-target');
     const t = await tgts.count();

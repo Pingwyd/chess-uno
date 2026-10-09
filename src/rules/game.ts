@@ -13,7 +13,7 @@ import {
   legalMoves, makeMove, other, parseFen, placementFen, typeOf, moveToSan,
   FLAG_CAPTURE, FLAG_DOUBLE,
 } from './chess';
-import { type ActionKind, type Card, type CardKind, buildDeck, isActionKind, shuffle } from './cards';
+import { type ActionKind, type Card, type CardKind, type RulesVersion, REVERSE_LIMIT, RULES_VERSION, buildDeck, isActionKind, shuffle } from './cards';
 
 export type PlayerId = 0 | 1;
 export type Phase = 'start' | 'overflow' | 'moving' | 'over';
@@ -51,6 +51,10 @@ export interface GameConfig {
   reverseProtectionTurns?: number;
   /** Max held action cards (§2.4). Default 2. */
   handLimit?: number;
+  /** Rules version (deck mix + Reverse limit). Default: the current version (2). */
+  rules?: RulesVersion;
+  /** Reverses each player may play per game; null = unlimited. Default from the rules version (v2: 1). */
+  reverseLimit?: number | null;
 }
 
 export type GameEvent =
@@ -59,6 +63,8 @@ export type GameEvent =
   | { type: 'reshuffle'; count: number }
   | { type: 'playCard'; player: PlayerId; card: Card }
   | { type: 'discardCard'; player: PlayerId; card: Card }
+  /** A dead card went straight to the discard pile: a Reverse after the player used up their Reverses. */
+  | { type: 'burnCard'; player: PlayerId; card: Card; from: 'deck' | 'hand' }
   | { type: 'move'; player: PlayerId; color: Color; move: Move; san: string; index: number }
   | { type: 'skipped'; player: PlayerId }
   | { type: 'skipCancelled'; player: PlayerId }
@@ -76,13 +82,15 @@ export interface TurnRecord {
   played: ActionKind[];
   toHand: ActionKind[];
   discarded: ActionKind[];
+  /** Dead Reverse cards discarded this turn (drawn after the player's Reverse was used up, or left in hand). */
+  burned?: ActionKind[];
   moves: string[];
   skipped?: boolean;
   endedByCheck?: boolean;
 }
 
 export interface GameState {
-  config: { clockMs: number; graceMs: number; reverseProtectionTurns: number; handLimit: number };
+  config: { clockMs: number; graceMs: number; reverseProtectionTurns: number; handLimit: number; rules: RulesVersion; reverseLimit: number | null };
   players: [PlayerInfo, PlayerInfo];
   pos: Position;
   colorOf: [Color, Color];
@@ -105,6 +113,8 @@ export interface GameState {
   actionPlayedThisTurn: boolean;
   pendingSkip: PlayerId | null;
   reverseBlockedFor: PlayerId | null;
+  /** Reverses each player has played. */
+  reversesUsed: [number, number];
   /** Double push made as the last move of the previous move-turn (for en passant). */
   epCarry: { square: number; color: Color } | null;
   turnLastDouble: { square: number; color: Color } | null;
@@ -148,11 +158,12 @@ export function createGame(cfg: GameConfig = {}, now = 0): GameState {
   const colorOf: [Color, Color] = [p0, other(p0)];
   const current: PlayerId = colorOf[0] === turn ? 0 : 1;
   let rng = (cfg.seed ?? Math.floor(Math.random() * 2 ** 31)) | 0;
+  const rules = cfg.rules ?? RULES_VERSION;
   let drawPile: Card[];
   if (cfg.deckOrder) {
     drawPile = cfg.deckOrder.map((kind) => ({ id: cardIdCounter++, kind })).reverse();
   } else {
-    [drawPile, rng] = shuffle(buildDeck(), rng);
+    [drawPile, rng] = shuffle(buildDeck(rules), rng);
   }
   const clockMs = cfg.clockMs ?? 10 * 60 * 1000;
   const s: GameState = {
@@ -161,6 +172,8 @@ export function createGame(cfg: GameConfig = {}, now = 0): GameState {
       graceMs: cfg.graceMs ?? 1000,
       reverseProtectionTurns: cfg.reverseProtectionTurns ?? 5,
       handLimit: cfg.handLimit ?? 2,
+      rules,
+      reverseLimit: cfg.reverseLimit !== undefined ? cfg.reverseLimit : REVERSE_LIMIT[rules],
     },
     players: cfg.players ?? [{ name: 'Player 1', kind: 'human' }, { name: 'Player 2', kind: 'human' }],
     pos,
@@ -182,6 +195,7 @@ export function createGame(cfg: GameConfig = {}, now = 0): GameState {
     actionPlayedThisTurn: false,
     pendingSkip: null,
     reverseBlockedFor: null,
+    reversesUsed: [0, 0],
     epCarry: null,
     turnLastDouble: null,
     turnProgress: false,
@@ -214,10 +228,17 @@ export function remainingMs(s: GameState, player: PlayerId, now: number): number
   return Math.max(0, ms);
 }
 
+/** True once a player has played all the Reverses the rules allow (v2: one per game). */
+export function reverseExhausted(s: GameState, player: PlayerId): boolean {
+  const limit = s.config.reverseLimit ?? null;
+  return limit !== null && (s.reversesUsed?.[player] ?? 0) >= limit;
+}
+
 export function canPlayCard(s: GameState, player: PlayerId, kind: ActionKind): boolean {
   if (s.phase === 'over' || player !== s.current) return false;
   if (s.actionPlayedThisTurn || s.isOpeningTurn) return false;
   if (kind === 'reverse') {
+    if (reverseExhausted(s, player)) return false;
     const need = s.config.reverseProtectionTurns;
     if (s.turnsCompleted[0] < need || s.turnsCompleted[1] < need) return false;
     if (s.reverseBlockedFor === player) return false;
@@ -230,6 +251,7 @@ export function cardBlockReason(s: GameState, player: PlayerId, kind: ActionKind
   if (s.isOpeningTurn) return 'Held cards unlock on your second turn';
   if (s.actionPlayedThisTurn) return 'One action card per turn';
   if (kind === 'reverse') {
+    if (reverseExhausted(s, player)) return 'You’ve used your Reverse (one per game)';
     const need = s.config.reverseProtectionTurns;
     if (s.turnsCompleted[0] < need || s.turnsCompleted[1] < need) {
       const left = Math.max(need - s.turnsCompleted[0], need - s.turnsCompleted[1]);
@@ -440,7 +462,21 @@ function playActionCard(s: GameState, card: Card, now: number) {
   s.colorOf = [s.colorOf[1], s.colorOf[0]];
   s.events.push({ type: 'reverse', player, colors: [s.colorOf[0], s.colorOf[1]] });
   s.reverseBlockedFor = opp(player);
+  s.reversesUsed[player]++;
+  // Reverses still in hand are now dead: discard them so they don't block the hand.
+  if (reverseExhausted(s, player)) {
+    const hand = s.hands[player];
+    for (const c of hand.filter((x) => x.kind === 'reverse')) burn(s, player, c, 'hand');
+    s.hands[player] = hand.filter((x) => x.kind !== 'reverse');
+  }
   endTurn(s, 'reverse', now);
+}
+
+function burn(s: GameState, player: PlayerId, card: Card, from: 'deck' | 'hand') {
+  s.discard.push(card);
+  s.events.push({ type: 'burnCard', player, card, from });
+  const rec = s.history[s.history.length - 1];
+  (rec.burned ??= []).push(card.kind as ActionKind);
 }
 
 function drawUntilNumber(s: GameState, now: number) {
@@ -456,6 +492,11 @@ function drawUntilNumber(s: GameState, now: number) {
       s.events.push({ type: 'reshuffle', count: pile.length });
     }
     const card = s.drawPile.pop()!;
+    // A Reverse drawn after yours is used up is dead: it's discarded and you draw again.
+    if (card.kind === 'reverse' && reverseExhausted(s, player)) {
+      burn(s, player, card, 'deck');
+      continue;
+    }
     if (isActionKind(card.kind)) {
       if (s.hands[player].length < s.config.handLimit) {
         s.hands[player].push(card);
@@ -540,6 +581,7 @@ export function formatTurn(t: TurnRecord): string {
   const parts: string[] = [];
   for (const p of t.played) parts.push(p === 'skip' ? '{Skip}' : '{Reverse}');
   for (const h of t.toHand) parts.push(`[${h === 'skip' ? 'Skip' : 'Reverse'}→hand]`);
+  for (const b of t.burned ?? []) parts.push(`[${b === 'skip' ? 'Skip' : 'Reverse'}✕]`);
   if (t.card) parts.push(`[${t.card}${t.capped ? '→1' : ''}]`);
   parts.push(...t.moves);
   return parts.join(' ');
