@@ -5,6 +5,7 @@ import { OnlineScreen, type OnlineIntent } from './OnlineScreen';
 import { normalizeCode } from '../net/protocol';
 import { PieceDefs, type PieceSet } from './pieces';
 import { setSoundEnabled } from './sound';
+import { has3D, preload3D, type BoardMode } from './BoardView';
 import type { GameSetup } from './useGame';
 
 const load = <T,>(k: string, d: T): T => {
@@ -47,6 +48,9 @@ export function App() {
   useEffect(clearUrlIntent, []);
   const [pieceSet, setPieceSet] = useState<PieceSet>(() => load('cu.pieceSet', 'arcane'));
   const [sound, setSound] = useState<boolean>(() => load('cu.sound', true));
+  const [boardMode, setBoardMode] = useState<BoardMode>(() => (load<BoardMode>('cu.board', '2d') === '3d' && has3D() ? '3d' : '2d'));
+  useEffect(() => { localStorage.setItem('cu.board', JSON.stringify(boardMode)); if (boardMode === '3d') preload3D(); }, [boardMode]);
+  const toggleBoard = () => setBoardMode((m) => (m === '3d' ? '2d' : '3d'));
 
   useEffect(() => { localStorage.setItem('cu.pieceSet', JSON.stringify(pieceSet)); }, [pieceSet]);
   useEffect(() => { localStorage.setItem('cu.sound', JSON.stringify(sound)); setSoundEnabled(sound); }, [sound]);
@@ -58,6 +62,8 @@ export function App() {
       {online ? (
         <OnlineScreen
           pieceSet={pieceSet}
+          boardMode={boardMode}
+          onToggleBoard={toggleBoard}
           onTogglePieces={() => setPieceSet((p) => (p === 'arcane' ? 'classic' : 'arcane'))}
           onHome={() => setOnline(false)}
           intent={urlIntent}
@@ -66,11 +72,13 @@ export function App() {
         <GameScreen
           setup={setup}
           pieceSet={pieceSet}
+          boardMode={boardMode}
+          onToggleBoard={toggleBoard}
           onTogglePieces={() => setPieceSet((p) => (p === 'arcane' ? 'classic' : 'arcane'))}
           onHome={() => setSetup(null)}
         />
       ) : (
-        <Home pieceSet={pieceSet} sound={sound} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} />
+        <Home pieceSet={pieceSet} sound={sound} boardMode={boardMode} onBoardMode={setBoardMode} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} />
       )}
     </div>
   );
