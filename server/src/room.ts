@@ -13,6 +13,7 @@ import {
 } from '../../src/net/protocol';
 import type { UsersTable } from './db';
 import { redactState } from './redact';
+import { DEFAULT_TC, clockFor, type TimeControl } from '../../src/rules/timeControl';
 
 export interface Client {
   ws: WebSocket;
@@ -49,12 +50,21 @@ const PLAYER_ACTIONS = new Set(['draw', 'playCard', 'resolveOverflow', 'move', '
 const CHAT_WINDOW_MS = 10_000;
 const CHAT_MAX_PER_WINDOW = 5;
 
+export interface RoomOptions { tc?: TimeControl; player0Color?: 'w' | 'b' }
+
 export interface LoggedAction { at: number; seat: PlayerId; action: GameAction }
 
 export class Room {
   readonly gameId = randomUUID();
   readonly seed = randomInt(2 ** 31 - 1);
-  readonly player0Color: 'w' | 'b' = randomInt(2) === 0 ? 'w' : 'b';
+  readonly player0Color: 'w' | 'b';
+  readonly tc: TimeControl;
+  /** Clock per player for this room's time control. */
+  readonly clockMs: number;
+  /** After the game: seat that offered a rematch (cleared on decline / leave). */
+  rematchBy: PlayerId | null = null;
+  /** Seats whose player left the finished game's screen (no rematch with them). */
+  readonly leftSeats = new Set<PlayerId>();
   status: 'waiting' | 'playing' | 'over' = 'waiting';
   seats: [Seat | null, Seat | null] = [null, null];
   state: GameState | null = null;
@@ -73,7 +83,11 @@ export class Room {
   invitee: FriendInfo | null = null;
 
   /** `isPrivate`: invite-link / friend-challenge rooms — only friends of the players see them in Live games. */
-  constructor(readonly code: string, readonly rated: boolean, private host: RoomHost, readonly isPrivate = false) {}
+  constructor(readonly code: string, readonly rated: boolean, private host: RoomHost, readonly isPrivate = false, opts: RoomOptions = {}) {
+    this.tc = opts.tc ?? DEFAULT_TC;
+    this.clockMs = clockFor(this.tc, host.clockMs);
+    this.player0Color = opts.player0Color ?? (randomInt(2) === 0 ? 'w' : 'b');
+  }
 
   seatOf(userId: string): PlayerId | null {
     if (this.seats[0]?.user.id === userId) return 0;
@@ -93,7 +107,7 @@ export class Room {
     this.startedAt = now;
     this.state = createGame({
       seed: this.seed,
-      clockMs: this.host.clockMs,
+      clockMs: this.clockMs,
       player0Color: this.player0Color,
       players: [{ name: a.user.name, kind: 'human' }, { name: b.user.name, kind: 'human' }],
     }, now);
@@ -118,7 +132,7 @@ export class Room {
     s.graceUntil = null;
     if (s.graceTimer) clearTimeout(s.graceTimer);
     s.graceTimer = null;
-    if (this.status === 'waiting') client.send({ t: 'roomCreated', code: this.code, ...(this.invitee ? { invitee: this.invitee } : {}) });
+    if (this.status === 'waiting') client.send({ t: 'roomCreated', code: this.code, tc: this.tc, ...(this.invitee ? { invitee: this.invitee } : {}) });
     else {
       this.broadcast();
       client.send({ t: 'chatHistory', msgs: this.chat });
@@ -312,6 +326,8 @@ export class Room {
       spectators: this.spectators.size,
       serverNow: this.host.now(),
       result: this.result,
+      tc: this.tc,
+      rematchBy: this.rematchBy,
     };
   }
 
@@ -334,7 +350,8 @@ export class Room {
       rules: this.state?.config.rules ?? null,
       seed: this.seed,
       player0Color: this.player0Color,
-      clockMs: this.host.clockMs,
+      clockMs: this.clockMs,
+      tc: this.tc,
       graceMs: this.state?.config.graceMs ?? 1000,
       startedAt: this.startedAt,
       players: this.state?.players ?? null,

@@ -16,6 +16,10 @@ import { CardBack, CardFace } from '../Card';
 import { Piece, type PieceSet } from '../pieces';
 import { formatClock } from '../PlayerZone';
 import './replay.css';
+import { GameScreen } from '../GameScreen';
+import { BOT_NAMES } from '../useGame';
+import type { BotLevel } from '../../engine/bot';
+import { SandboxTransport, sandboxStart } from '../../replay/sandbox';
 import { Icon } from '../icons';
 import { keyMomentsFor, loadSide, mistakes, saveSide, shows, stepMistake, viewerSeat, type ReviewSide } from '../../replay/reviewFilter';
 
@@ -31,6 +35,7 @@ interface Props {
   boardMode: BoardMode;
   onToggleBoard: () => void;
   onBoardUnavailable: () => void;
+  onTogglePieces?: () => void;
   onClose: () => void;
 }
 
@@ -96,7 +101,7 @@ function useMedia(q: string) {
 
 interface LineView { turn: TurnReview; step: number; playing: boolean }
 
-function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUnavailable, onClose, initialTab }: Props & { record: GameRecord; replay: Replay }) {
+function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUnavailable, onTogglePieces, onClose, initialTab }: Props & { record: GameRecord; replay: Replay }) {
   const wide = useMedia('(min-width: 980px) and (min-aspect-ratio: 5/4)');
   const frames = replay.frames;
   const nav = useMemo(() => frames.map((f, i) => (f.kind === 'clock' ? -1 : i)).filter((i) => i >= 0), [frames]);
@@ -106,6 +111,8 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
   const [tab, setTab] = useState<'replay' | 'review'>(initialTab ?? 'replay');
   const [anim, setAnim] = useState<LastMoveAnim | null>(null);
   const [line, setLine] = useState<LineView | null>(null);
+  // "Try it yourself": the reviewed turn being replayed against the engine.
+  const [trying, setTrying] = useState<TurnReview | null>(null);
   const animKey = useRef(1);
   const { review, progress, failed } = useReview(record);
   // Me / Opponent / Both: whose verdicts, moments and better lines show. Accuracy always shows for both.
@@ -281,6 +288,7 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
     <Coach
       turn={curTurn} frame={frame} line={line} review={review} progress={progress} failed={failed}
       names={names} shown={shown} keyCount={review ? keyMomentsFor(review, side, viewer).length : 0}
+      onTry={(t) => { setPlaying(false); setLine(null); setTrying(t); }}
       onShowLine={showLine} onPlayLine={() => line && setLine({ ...line, step: 0, playing: true })} onExitLine={() => { setLine(null); setAnim(null); }}
       onOpenReview={wide && tab === 'review' ? undefined : () => { setTab('review'); requestAnimationFrame(() => scrollToTabs()); }}
     />
@@ -301,6 +309,15 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
         keyMoments={review ? keyMomentsFor(review, side, viewer) : []} onGo={(i) => go(i, false)} onShowLine={showLine} />;
 
   const turnNo = useCallback((i: number) => replay.final.history[i]?.turn || i + 1, [replay]);
+  if (trying) {
+    return (
+      <TrySandbox
+        turn={trying} frames={frames} turnNo={turnNo(trying.turn)} pieceSet={pieceSet} boardMode={boardMode}
+        onToggleBoard={onToggleBoard} onTogglePieces={onTogglePieces ?? (() => {})}
+        onBack={() => { setTrying(null); go(trying.frameStart, false); }}
+      />
+    );
+  }
   if (wide) {
     return (
       <TurnNo.Provider value={turnNo}>
@@ -533,9 +550,9 @@ function LabelPill({ label, small }: { label: Label; small?: boolean }) {
   return <span className={`label-pill lbl-${label} ${small ? 'sm' : ''}`}><b>{labelMark(label)}</b>{!small && LABEL_TEXT[label]}</span>;
 }
 
-function Coach({ turn, frame, line, review, progress, failed, names, shown, keyCount, onShowLine, onPlayLine, onExitLine, onOpenReview }: {
+function Coach({ turn, frame, line, review, progress, failed, names, shown, keyCount, onTry, onShowLine, onPlayLine, onExitLine, onOpenReview }: {
   turn: TurnReview | null; frame: Frame; line: LineView | null; review: GameReview | null; progress: number | null; failed: boolean; names: [string, string];
-  shown: Shown; keyCount: number;
+  shown: Shown; keyCount: number; onTry: (t: TurnReview) => void;
   onShowLine: (t: TurnReview) => void; onPlayLine: () => void; onExitLine: () => void; onOpenReview?: () => void;
 }) {
   const tn = useContext(TurnNo);
@@ -554,6 +571,7 @@ function Coach({ turn, frame, line, review, progress, failed, names, shown, keyC
         </div>
         <div className="coach-actions">
           <button className="btn primary small" onClick={onPlayLine} data-testid="play-line"><Icon name={line.step ? 'rotate-cw' : 'play'} size={15} /> {line.step ? 'Replay line' : 'Play the line'}</button>
+          <button className="btn ghost small" onClick={() => onTry(t)} data-testid="try-line"><Icon name="flask" size={15} /> Try it yourself</button>
           <button className="btn ghost small" onClick={onExitLine} data-testid="exit-line">Back to game</button>
         </div>
       </div>
@@ -592,6 +610,7 @@ function Coach({ turn, frame, line, review, progress, failed, names, shown, keyC
       <div className="coach coach-idle coach-hidden" data-testid="coach-hidden">
         <span className="coach-who">{names[turn.player]} · turn {tn(turn.turn)}</span>
         <span>Verdict hidden by the filter. Choose Both to see it.</span>
+        <TryButton turn={turn} onTry={onTry} />
       </div>
     );
   }
@@ -602,8 +621,36 @@ function Coach({ turn, frame, line, review, progress, failed, names, shown, keyC
         <span className="coach-who">{names[turn.player]} · turn {tn(turn.turn)}{turn.card ? ` · drew a ${turn.card}` : ''}</span>
       </div>
       <p className="coach-text" data-testid="coach-text">{turn.text}</p>
-      {hasBetterLine(turn) && <button className="btn ghost small" onClick={() => onShowLine(turn)} data-testid="show-line">Show better line <Icon name="arrow-up-right" size={15} /></button>}
+      <div className="coach-actions">
+        {hasBetterLine(turn) && <button className="btn ghost small" onClick={() => onShowLine(turn)} data-testid="show-line">Show better line <Icon name="arrow-up-right" size={15} /></button>}
+        <TryButton turn={turn} onTry={onTry} />
+      </div>
     </div>
+  );
+}
+
+function TryButton({ turn, onTry }: { turn: TurnReview; onTry: (t: TurnReview) => void }) {
+  return <button className="btn ghost small" onClick={() => onTry(turn)} data-testid="try-it">Try it yourself <Icon name="flask" size={15} /></button>;
+}
+
+/** Play the reviewed turn again (same card, same deck) against the engine, with undo and reset. */
+function TrySandbox({ turn, frames, turnNo, pieceSet, boardMode, onToggleBoard, onTogglePieces, onBack }: {
+  turn: TurnReview; frames: Frame[]; turnNo: number; pieceSet: PieceSet; boardMode: BoardMode;
+  onToggleBoard: () => void; onTogglePieces: () => void; onBack: () => void;
+}) {
+  const level: BotLevel = 'hard';
+  const transport = useMemo(
+    () => new SandboxTransport(sandboxStart(frames[turn.frameStart].state, turn.player, BOT_NAMES[level], Date.now()), turn.player),
+    [frames, turn],
+  );
+  const start = frames[turn.frameStart].state;
+  return (
+    <GameScreen
+      setup={{ mode: 'bot', botLevel: level, humanColor: start.colorOf[turn.player] }}
+      pieceSet={pieceSet} boardMode={boardMode} onToggleBoard={onToggleBoard} onTogglePieces={onTogglePieces}
+      onHome={onBack}
+      sandbox={{ transport, subtitle: `Turn ${turnNo}${turn.card ? ` · ${turn.card}-card` : ''} · ${start.colorOf[turn.player] === 'w' ? 'White' : 'Black'} vs ${BOT_NAMES[level]}`, onBack }}
+    />
   );
 }
 

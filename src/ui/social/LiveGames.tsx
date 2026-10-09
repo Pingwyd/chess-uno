@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LiveGame } from '../../net/protocol';
 import { Avatar } from './Avatar';
 import { client, useOnline } from './useOnline';
+import { TC_SHORT, asTimeControl } from '../../rules/timeControl';
 import { Icon } from '../icons';
 
 type Filter = 'all' | 'rated' | 'casual' | 'friends';
@@ -55,7 +56,7 @@ function LiveRow({ g, now, onWatch }: { g: LiveGame; now: number; onWatch: (code
         <b><span>{a.name}</span> <small>{a.rating}</small> <em>vs</em> <span>{b.name}</span> <small>{b.rating}</small></b>
         <small>
           {g.rated ? 'Rated' : 'Casual'}{g.friend && <span className="friend-tag"> · <Icon name="star" size={11} /> Friend</span>}
-          {' · '}Turn {g.turn} · {ago(g.startedAt, now)}{g.rated ? ' · 1-turn delay' : ''}
+          {' · '}{TC_SHORT[asTimeControl(g.tc)]} · Turn {g.turn} · {ago(g.startedAt, now)}{g.rated ? ' · 1-turn delay' : ''}
         </small>
       </span>
       <span className="lr-watch"><span className="lr-eye" aria-label={`${g.spectators} watching`}><Icon name="eye" size={14} /> {g.spectators}</span><span className="lr-go">Watch <Icon name="chevron-right" size={14} /></span></span>

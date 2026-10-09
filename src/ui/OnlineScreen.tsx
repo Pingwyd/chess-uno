@@ -15,6 +15,9 @@ import { Avatar } from './social/Avatar';
 import type { FriendInfo } from '../net/protocol';
 import './social/social.css';
 import { Icon } from './icons';
+import { ClockPicker } from './ClockPicker';
+import { useSettings } from './settings/store';
+import { TC_SHORT, asTimeControl, type TimeControl } from '../rules/timeControl';
 
 export type OnlineIntent = { kind: 'join' | 'watch'; code: string } | null;
 
@@ -66,6 +69,9 @@ export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePiece
       onChat: (t) => client.sendChat(t),
       onEmote: (e) => client.sendEmote(e),
       onLeave: () => client.leave(),
+      rematch: view.rematch && view.rematch.code === view.snap.code ? view.rematch : null,
+      onOfferRematch: () => client.offerRematch(),
+      onDeclineRematch: () => client.declineRematch(),
     };
     return (
       <GameScreen
@@ -86,6 +92,7 @@ export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePiece
 function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: { view: OnlineView; bootError: string | null; onHome: () => void; onReplay: OpenReplay; onSocial: (t: SocialTab) => void; onLeaderboard: () => void }) {
   const [auth, setAuth] = useState<'login' | 'signup' | null>(null);
   const [code, setCode] = useState('');
+  const { timeControl: tc } = useSettings();
   const user = view.user;
   const statusText = bootError ? 'Server unreachable' : view.status === 'online' ? 'Connected' : view.status === 'connecting' ? 'Connecting…' : view.status === 'offline' ? 'Reconnecting…' : '…';
   const ready = view.status === 'online';
@@ -132,23 +139,24 @@ function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: {
       </section>}
 
       {view.lobby.kind === 'waiting' ? (
-        <WaitingRoom code={view.lobby.code} invitee={view.lobby.invitee} since={view.lobby.since} />
+        <WaitingRoom code={view.lobby.code} invitee={view.lobby.invitee} since={view.lobby.since} tc={asTimeControl(view.lobby.tc)} />
       ) : view.lobby.kind === 'queued' ? (
-        <Matchmaking since={view.lobby.since} rated={view.lobby.rated} user={user} />
+        <Matchmaking since={view.lobby.since} rated={view.lobby.rated} user={user} tc={asTimeControl(view.lobby.tc)} />
       ) : (
         <div className="lobby-grid">
+          <section className="lobby-clock" data-testid="lobby-clock"><ClockPicker label="Clock for quick match and invites" /></section>
           <section className="lobby-card ink qm-card">
             <span className="eyebrow">{user && !user.guest ? 'Rated' : 'Casual'}</span>
             <h2>Quick match</h2>
-            <p>{user && !user.guest ? 'Paired with a player near your rating. 10 minutes each.' : 'Guests are paired with other guests. 10 minutes each.'}</p>
+            <p>{user && !user.guest ? `Paired with a player near your rating on the same clock. ${TC_SHORT[tc]} each.` : `Guests are paired with other guests. ${TC_SHORT[tc]} each.`}</p>
             <RankedNote />
-            <button className="btn primary wide" disabled={!ready} onClick={() => client.quickMatch()} data-testid="quick-match">Find opponent <Icon name="arrow-right" size={18} /></button>
+            <button className="btn primary wide" disabled={!ready} onClick={() => client.quickMatch(tc)} data-testid="quick-match">Find opponent <Icon name="arrow-right" size={18} /></button>
           </section>
 
           <section className="lobby-card">
             <h2>Play a friend</h2>
             <p>Unrated private room. Share a link or a 6-letter code.</p>
-            <button className="btn wide" disabled={!ready} onClick={() => client.createRoom()} data-testid="create-invite">Create invite link</button>
+            <button className="btn wide" disabled={!ready} onClick={() => client.createRoom(tc)} data-testid="create-invite">Create invite link</button>
             <form
               className="code-form"
               onSubmit={(e) => { e.preventDefault(); const c = normalizeCode(code); if (c) client.joinRoom(c); }}
@@ -174,7 +182,7 @@ function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: {
 const MATCH_WINDOW = 100;
 const MATCH_WIDEN_PER_SEC = 25;
 
-function Matchmaking({ since, rated, user }: { since: number; rated: boolean; user: PublicUser | null }) {
+function Matchmaking({ since, rated, user, tc }: { since: number; rated: boolean; user: PublicUser | null; tc: TimeControl }) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 250); return () => clearInterval(id); }, []);
   const s = Math.max(0, Math.floor((now - since) / 1000));
@@ -185,7 +193,7 @@ function Matchmaking({ since, rated, user }: { since: number; rated: boolean; us
       <div className="mm-timer num" aria-label="Time searching">{Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}</div>
       <div className="mm-strip">
         <div><span className="eyebrow">Mode</span><b>{rated ? 'Rated' : 'Casual'}</b></div>
-        <div><span className="eyebrow">Clock</span><b>10 min</b></div>
+        <div><span className="eyebrow">Clock</span><b>{TC_SHORT[tc]}</b></div>
         <div><span className="eyebrow">{rated ? 'Rating range' : 'Pool'}</span><b className="num">{rated ? `${Math.max(0, r - w)}–${r + w}` : 'Guests'}</b></div>
       </div>
       {rated && (
@@ -200,7 +208,7 @@ function Matchmaking({ since, rated, user }: { since: number; rated: boolean; us
   );
 }
 
-function WaitingRoom({ code, invitee, since }: { code: string; invitee?: FriendInfo; since?: number }) {
+function WaitingRoom({ code, invitee, since, tc }: { code: string; invitee?: FriendInfo; since?: number; tc: TimeControl }) {
   const link = `${location.origin}${location.pathname}?join=${code}`;
   const [now, setNow] = useState(Date.now());
   useEffect(() => { if (!invitee) return; const id = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(id); }, [invitee]);
@@ -209,7 +217,7 @@ function WaitingRoom({ code, invitee, since }: { code: string; invitee?: FriendI
       <section className="lobby-card waiting challenge-wait" data-testid="challenge-wait">
         <Avatar name={invitee.name} avatar={invitee.avatar} size={72} />
         <h2>Challenge sent</h2>
-        <p>Waiting for <b>{invitee.name}</b> ({invitee.rating}) to accept. The game starts the moment they do.</p>
+        <p>Waiting for <b>{invitee.name}</b> ({invitee.rating}) to accept. {TC_SHORT[tc]} each; the game starts the moment they do.</p>
         <div className="cw-timer" data-testid="challenge-wait-timer">{countdown((since ?? now) + CHALLENGE_TTL_MS - now)}</div>
         <small className="cw-note">The invite expires in {CHALLENGE_TTL_MS / 60_000} minutes.</small>
         <button className="btn ghost" onClick={() => client.leave()} data-testid="challenge-cancel">Cancel challenge</button>
@@ -227,6 +235,7 @@ function WaitingRoom({ code, invitee, since }: { code: string; invitee?: FriendI
       <span className="eyebrow">Invite code</span>
             <div className="invite-code" data-testid="invite-code">{code}</div>
       <h2>Waiting for your friend</h2>
+      <p className="wait-clock"><Icon name="timer" size={15} /> {TC_SHORT[tc]} each</p>
       <div className="invite-link" data-testid="invite-link">{link}</div>
       <div className="panel-actions">
         <button className="btn" onClick={copy}><Icon name={copied ? 'check' : 'link'} size={16} /> {copied ? 'Copied' : 'Copy link'}</button>

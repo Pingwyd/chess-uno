@@ -7,6 +7,7 @@ import { client, useOnline } from '../social/useOnline';
 import { setSettings, useSettings, type MotionPref, type Settings, type ThemePref } from './store';
 import { RULES_VERSION } from '../../rules/cards';
 import { Icon } from '../icons';
+import { permission, requestPermission, type Permission } from '../../notify/browser';
 
 export interface PrefsProps {
   pieceSet: PieceSet;
@@ -42,9 +43,37 @@ function Slider({ value, onChange, label, sub, testid, disabled, onRelease }: { 
   );
 }
 
+/** Master switch for system notifications; switching it on asks the browser for permission. */
+function BrowserNotifyToggle() {
+  const s = useSettings();
+  const [perm, setPerm] = useState<Permission>(() => permission());
+  const [busy, setBusy] = useState(false);
+  const on = s.browserNotify && perm === 'granted';
+  const sub = perm === 'unsupported' ? 'Not supported in this browser'
+    : perm === 'denied' ? 'Blocked for this site. Allow notifications in your browser settings, then switch this on.'
+    : 'While Chess Uno is open in a background tab';
+  const change = async (v: boolean) => {
+    if (!v) { setSettings({ browserNotify: false }); return; }
+    setBusy(true);
+    const p = await requestPermission();
+    setBusy(false);
+    setPerm(p);
+    setSettings({ browserNotify: p === 'granted' });
+  };
+  return (
+    <>
+      <Toggle label="Browser notifications" sub={sub} on={on} onChange={(v) => void change(v)} disabled={busy || perm === 'unsupported'} testid="set-browser-notify" />
+      <p className="prof-note notify-note" data-testid="notify-note">
+        <Icon name={on ? 'bell' : 'bell-off'} size={15} />
+        {on ? 'On. Choose what to hear about below.' : 'Off. You still see these inside the app.'} Alerts when the app is closed arrive later.
+      </p>
+    </>
+  );
+}
+
 const notifyLabels: Record<keyof Settings['notify'], [string, string]> = {
-  turn: ['Your turn', 'When an online opponent has moved'],
-  challenges: ['Challenges', 'When a friend challenges you'],
+  turn: ['Your turn', 'When an online opponent has moved or a game starts'],
+  challenges: ['Challenges', 'Friend challenges and rematch offers'],
   friends: ['Friend requests', 'New requests and accepted requests'],
   streak: ['Streak reminders', 'Keep your learning streak alive'],
 };
@@ -104,8 +133,8 @@ export function PrefsTab(p: PrefsProps) {
       </section>
 
       <section className="set-card" data-testid="set-notify">
-        <h3>Notifications <small>Preview</small></h3>
-        <p className="prof-note">Push notifications arrive with the mobile app. Your choices are saved now and will apply then.</p>
+        <h3>Notifications</h3>
+        <BrowserNotifyToggle />
         {(Object.keys(notifyLabels) as (keyof Settings['notify'])[]).map((k) => (
           <Toggle key={k} label={notifyLabels[k][0]} sub={notifyLabels[k][1]} on={s.notify[k]} onChange={(v) => setSettings({ notify: { ...s.notify, [k]: v } })} testid={`set-notify-${k}`} />
         ))}

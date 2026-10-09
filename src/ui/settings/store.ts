@@ -3,6 +3,7 @@
  * original keys (cu.board, cu.pieceSet, cu.sound) and live in App state; everything else is here.
  */
 import { useSyncExternalStore } from 'react';
+import { DEFAULT_TC, type TimeControl } from '../../rules/timeControl';
 
 export type MotionPref = 'system' | 'on' | 'off';
 export type GraphicsPref = 'auto' | 'high' | 'low';
@@ -27,12 +28,17 @@ export interface Settings {
   graphics: GraphicsPref;
   /** Paper (light, default), ink (dark), or follow the OS. */
   theme: ThemePref;
+  /** Clock for new games (vs bot, Pass & Play, quick match, invites and challenges). */
+  timeControl: TimeControl;
+  /** System notifications when the tab is hidden (permission asked when switched on). */
+  browserNotify: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   hints: true, confirmMoves: false, sfxVolume: 0.8, musicVolume: 0, vibration: true,
   notify: { turn: true, friends: true, challenges: true, streak: true },
   reducedMotion: 'system', avatar: null, graphics: 'auto', theme: 'light',
+  timeControl: DEFAULT_TC, browserNotify: false,
 };
 
 const KEY = 'cu.settings';

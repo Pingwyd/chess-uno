@@ -8,11 +8,12 @@ import { setSoundEnabled } from './sound';
 import { has3D, preload3D, type BoardMode } from './BoardView';
 import type { GameSetup } from './useGame';
 import type { LearnTab } from './learn/LearnScreen';
-import { useProgress } from '../learn/store';
+import { getProgress, useProgress } from '../learn/store';
+import { permission, registerServiceWorker, startStreakReminder, systemNotify } from '../notify/browser';
 import { setActiveSkins } from './skins';
 import type { ReplaySource } from './replay/ReplayScreen';
 import { SettingsScreen, type SettingsTab } from './settings/SettingsScreen';
-import { useReducedMotion } from './settings/store';
+import { getSettings, useReducedMotion } from './settings/store';
 import { SocialLayer } from './social/SocialLayer';
 import { getOnlineClient, HAS_SERVER, storedToken } from '../net/online';
 import { AppNav, type NavTab } from './nav/AppNav';
@@ -98,6 +99,14 @@ export function App() {
     const c = getOnlineClient();
     c.ensureSession().then(() => c.connect()).catch(() => {});
   }, []);
+  // Browser notifications (hidden tab only) + the daily streak reminder.
+  useEffect(() => {
+    const c = getOnlineClient();
+    c.onSystem = (e) => { void systemNotify(e, getSettings()); };
+    if (getSettings().browserNotify && permission() === 'granted') void registerServiceWorker();
+    const stop = startStreakReminder({ progress: getProgress, settings: getSettings, inApp: (text) => c.notify(text, 'flame', 'learn', 12_000) });
+    return () => { c.onSystem = null; stop(); };
+  }, []);
   /** Jump to the online screen from anywhere (accepting a challenge, watching a friend…). */
   const goOnline = (v: OnlineIntent = null) => {
     setSetup(null); setReplay(null); setLearn(null); setSettingsTab(null); setPage(null);
@@ -133,7 +142,7 @@ export function App() {
     <div className={`app skin-w-${progress.skins.w} skin-b-${progress.skins.b} ${reduced ? 'reduce-motion' : ''} ${navActive ? 'has-nav' : ''}`}>
       <PieceDefs />
       <div className="bg-sparks" aria-hidden="true" />
-      <SocialLayer onAccept={() => goOnline()} onOpenFriends={() => openSocial('friends')} />
+      <SocialLayer onAccept={() => goOnline()} onOpenFriends={() => openSocial('friends')} onOpenLearn={() => navTo('learn')} />
       {replay ? (
         <Suspense fallback={<div className="learn-loading">Loading replay…</div>}>
           <ReplayScreen
@@ -143,6 +152,7 @@ export function App() {
             boardMode={boardMode}
             onToggleBoard={toggleBoard}
             onBoardUnavailable={() => setBoardMode('2d')}
+            onTogglePieces={() => setPieceSet((p) => (p === 'arcane' ? 'classic' : 'arcane'))}
             onClose={() => {
               if (urlReplay) { const u = new URL(location.href); u.searchParams.delete('replay'); history.replaceState(null, '', u.toString()); }
               setOnline(replay.back === 'online');
@@ -205,7 +215,7 @@ export function App() {
           onReview={(src, tab) => { setSetup(null); setReplay({ src, tab, back: 'home' }); }}
         />
       ) : (
-        <Home pieceSet={pieceSet} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} onLearn={(t) => setLearn(t)} onReplay={(src, tab) => setReplay({ src, tab, back: 'home' })} />
+        <Home pieceSet={pieceSet} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => { setOnline(true); window.scrollTo(0, 0); }} onLearn={(t) => setLearn(t)} onReplay={(src, tab) => setReplay({ src, tab, back: 'home' })} />
       )}
       {navActive !== null && <AppNav active={navActive} onNav={navTo} />}
       {auth && <AuthModal mode={auth} onMode={setAuth} onClose={() => setAuth(null)} />}
