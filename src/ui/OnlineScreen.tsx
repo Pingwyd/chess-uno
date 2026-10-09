@@ -91,7 +91,7 @@ function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootEr
       {bootError && (
         <div className="lobby-card warn">
           <b>{bootError}</b>
-          <p>Start the game server with <code>npm run server</code>, or point the client at one with <code>VITE_SERVER_URL</code>. Currently using <code>{SERVER_URL}</code>.</p>
+          {import.meta.env.DEV || import.meta.env.VITE_SERVER_URL ? <p>Start the game server with <code>npm run server</code>, or point the client at one with <code>VITE_SERVER_URL</code>. Currently using <code>{SERVER_URL}</code>.</p> : <p>Online play is coming soon. Until then, try Pass &amp; Play, the bots, or the Learn path.</p>}
         </div>
       )}
 
