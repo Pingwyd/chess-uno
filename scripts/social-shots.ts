@@ -143,21 +143,34 @@ const page = await ctx.newPage();
 const errors: string[] = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-const shot = async (name: string, full = false) => { await wait(350); await page.screenshot({ path: `${OUT}social-${name}.png`, fullPage: full }); console.log('  ✓', name); };
+// Full-page captures: pin the fixed nav to the end of the page so it isn't stamped mid-page.
+const PIN_NAV = '.app-nav { position: absolute !important; }';
+const fullShot = async (p: typeof page, path: string) => {
+  const h = await p.addStyleTag({ content: PIN_NAV });
+  await p.screenshot({ path, fullPage: true });
+  await h.evaluate((el) => el.remove());
+};
+const shot = async (name: string, full = false) => {
+  await wait(350);
+  const path = `${OUT}social-${name}.png`;
+  if (full) await fullShot(page, path); else await page.screenshot({ path });
+  console.log('  ✓', name);
+};
 const tid = (id: string) => page.getByTestId(id);
 
 await page.goto(WEB);
-await tid('open-profile').waitFor();
-await page.getByText('Prosper').first().waitFor();
+await tid('app-nav').waitFor();
+await page.locator('.ni-long', { hasText: 'Prosper' }).waitFor({ state: 'attached' });
 await shot('home');
+await shot('home-full', true);
 
-// Settings
-await tid('open-settings').click();
+// Settings (⚙ in the nav → Profile / Badges & skins / Settings)
+await page.goto(WEB + '/?settings');
 await tid('prefs').waitFor();
 await shot('settings', true);
 
 // Profile with rating chart
-await tid('tab-profile').click();
+await tid('nav-profile').click();
 await page.locator('.rating-chart svg').waitFor();
 await shot('profile', true);
 await tid('avatar-btn').click();
@@ -165,10 +178,21 @@ await tid('avatar-picker').waitFor();
 await shot('avatar-picker');
 await tid('avatar-btn').click();
 
-// Friends with presence
-await tid('tab-friends').click();
+// Badges & skins tab (from the Profile teaser)
+await tid('open-collection').click();
+await tid('collection').waitFor();
+await shot('collection');
+await shot('collection-full', true);
+
+// Leaderboard page
+await tid('nav-leaderboard').click();
+await tid('lb-podium').waitFor();
+await shot('leaderboard', true);
+
+// Social → Friends with presence
+await tid('nav-social').click();
 await tid('friend-Kofi').waitFor();
-await page.waitForFunction(() => document.querySelectorAll('.presence-dot.pd-playing').length >= 2);
+await page.waitForFunction(() => document.querySelectorAll('.presence-dot.pd-playing').length >= 2, undefined, { timeout: 8000 }).catch(async (e) => { await page.screenshot({ path: '/tmp/dbg.png', fullPage: true }); throw e; });
 await shot('friends', true);
 
 // Friend request flow: search + add, then an incoming request arrives live.
@@ -184,9 +208,20 @@ await shot('friend-request');
 await tid('accept-Zara').click();
 await tid('friend-Zara').waitFor();
 await tid('friend-search').fill('');
+for (const x of await page.getByRole('button', { name: 'Dismiss' }).all()) await x.click();
+
+// Social → Live games
+await tid('social-tab-live').click();
+await page.waitForFunction(() => document.querySelectorAll('[data-testid="live-row"]').length >= 3);
+await shot('live');
+await tid('live-games').screenshot({ path: `${OUT}social-live-card.png` });
+await tid('live-filter-friends').click();
+await wait(300);
+await tid('live-games').screenshot({ path: `${OUT}social-live-friends.png` });
+await tid('live-filter-all').click();
 
 // Incoming challenge (on Home), declined.
-await tid('settings-home').click();
+await tid('nav-home').click();
 await tid('home').waitFor();
 adaWs.send({ t: 'challenge', userId: me.id });
 await tid('challenge-card').waitFor();
@@ -195,9 +230,8 @@ await shot('challenge');
 await tid('challenge-decline').click();
 await adaWs.waitFor((m) => m.t === 'challengeUpdate' && m.status === 'declined', 8000, 0);
 
-// Outgoing challenge from Friends → waiting room → Ada accepts → game.
-await tid('open-profile').click();
-await tid('tab-friends').click();
+// Outgoing challenge from Social → waiting room → Ada accepts → game (nav hidden).
+await tid('nav-social').click();
 await tid('challenge-Ada').click();
 await tid('challenge-wait').waitFor();
 await wait(1500);
@@ -206,6 +240,7 @@ const ch = await adaWs.waitFor<{ t: 'challenge'; challenge: { id: string } }>((m
 adaWs.send({ t: 'challengeReply', id: ch.challenge.id, accept: true });
 await tid('game').waitFor();
 await wait(1500);
+if (await tid('app-nav').count()) throw new Error('nav should be hidden during a game');
 await shot('challenge-accepted');
 const adaSnap = await adaWs.waitSnap(() => true);
 adaWs.send({ t: 'action', action: { type: 'resign', player: adaSnap.you! } });
@@ -214,36 +249,42 @@ await wait(800);
 await shot('challenge-won');
 await page.getByRole('button', { name: 'New game' }).click();
 
-// Live games in the lobby
-await tid('live-games').waitFor();
-await page.waitForFunction(() => document.querySelectorAll('[data-testid="live-row"]').length >= 3);
-await tid('live-games').scrollIntoViewIfNeeded();
-await shot('live');
-await tid('live-games').screenshot({ path: `${OUT}social-live-card.png` });
-await tid('live-filter-friends').click();
-await wait(300);
-await tid('live-games').screenshot({ path: `${OUT}social-live-friends.png` });
-await tid('live-filter-all').click();
-await tid('lobby-friends').scrollIntoViewIfNeeded();
-await shot('lobby-friends');
+// The online lobby now links to Social / Leaderboard instead of duplicating them.
+await tid('lobby-links').waitFor();
+await tid('lobby-links').scrollIntoViewIfNeeded();
+await shot('lobby');
 
-// Spectate Kofi vs Mei (rated → one turn behind)
+// Spectate Kofi vs Mei from Live games (rated → one turn behind)
+await tid('lobby-to-live').click();
+await page.waitForFunction(() => document.querySelectorAll('[data-testid="live-row"]').length >= 3);
 await page.locator(`[data-testid="live-row"][data-code="${kofiWs.snap!.code}"]`).click();
 await tid('game').waitFor();
 await autoplay(kofiWs, meiWs, 6);
 await wait(1500);
 await shot('spectate');
 
-// Desktop profile
+// Desktop (top nav bar)
 const desk = await browser.newContext({ viewport: { width: 1280, height: 860 }, deviceScaleFactor: 1 });
-await desk.addInitScript(([t]) => { localStorage.setItem('cu.token', t); localStorage.setItem('cu.sound', 'false'); }, [me.token]);
+await desk.addInitScript(([t, l]) => { localStorage.setItem('cu.token', t); localStorage.setItem('cu.learn', l); localStorage.setItem('cu.sound', 'false'); }, [me.token, learn]);
 const dp = await desk.newPage();
-await dp.goto(WEB + '/?settings');
-await dp.getByTestId('tab-profile').click();
+const dshot = async (name: string, full = false) => { await wait(600); const path = `${OUT}social-${name}.png`; if (full) await fullShot(dp, path); else await dp.screenshot({ path }); console.log('  ✓', name); };
+await dp.goto(WEB);
+await dp.getByTestId('app-nav').waitFor();
+await dp.locator('.ni-long', { hasText: 'Prosper' }).waitFor({ state: 'attached' });
+await dshot('home-desktop');
+await dp.getByTestId('nav-social').click();
+await dp.getByTestId('friend-Kofi').waitFor();
+await dp.waitForFunction(() => document.querySelectorAll('[data-testid="live-row"]').length >= 3);
+await dshot('social-desktop');
+await dp.getByTestId('nav-leaderboard').click();
+await dp.getByTestId('lb-podium').waitFor();
+await dshot('leaderboard-desktop');
+await dp.getByTestId('nav-profile').click();
 await dp.locator('.rating-chart svg').waitFor();
-await wait(500);
-await dp.screenshot({ path: `${OUT}social-profile-desktop.png`, fullPage: true });
-console.log('  ✓ profile-desktop');
+await dshot('profile-desktop', true);
+await dp.getByTestId('tab-collection').click();
+await dp.getByTestId('collection').waitFor();
+await dshot('collection-desktop', true);
 
 console.log(errors.length ? `page errors:\n${errors.join('\n')}` : 'no page errors');
 await browser.close();

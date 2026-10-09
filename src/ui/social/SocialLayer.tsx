@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { ChallengeInfo } from '../../net/protocol';
+import { CHALLENGE_TTL_MS, type ChallengeInfo } from '../../net/protocol';
+import { countdown } from './countdown';
 import { Avatar } from './Avatar';
 import { client, useOnline } from './useOnline';
 import { buzz, sfx } from '../sound';
@@ -32,8 +33,7 @@ function ChallengeCard({ ch, more, offset, onAccept }: { ch: ChallengeInfo; more
   const [now, setNow] = useState(Date.now() + offset);
   useEffect(() => { sfx.turn(); buzz(60); }, []);
   useEffect(() => { const id = setInterval(() => setNow(Date.now() + offset), 500); return () => clearInterval(id); }, [offset]);
-  const left = Math.max(0, Math.ceil((ch.expiresAt - now) / 1000));
-  const frac = Math.max(0, Math.min(1, (ch.expiresAt - now) / 60_000));
+  const frac = Math.max(0, Math.min(1, (ch.expiresAt - now) / CHALLENGE_TTL_MS));
   return (
     <div className="challenge-card" role="alertdialog" aria-label={`${ch.from.name} challenges you`} data-testid="challenge-card">
       <div className="cc-top">
@@ -42,7 +42,7 @@ function ChallengeCard({ ch, more, offset, onAccept }: { ch: ChallengeInfo; more
           <b>{ch.from.name} <small>{ch.from.rating}</small></b>
           <span>challenges you to a casual game ⚔</span>
         </div>
-        <span className="cc-timer">{left}s</span>
+        <span className="cc-timer" data-testid="challenge-timer">{countdown(ch.expiresAt - now)}</span>
       </div>
       <div className="cc-bar"><i style={{ width: `${frac * 100}%` }} /></div>
       <div className="cc-actions">

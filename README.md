@@ -264,22 +264,35 @@ Every finished game is saved and can be replayed and reviewed — vs bot, Pass &
 
 ## Settings, profile, friends and live games
 
-Open it from the **avatar** (profile) or **gear** (settings) at the top of Home, or with `?settings`. There are three tabs.
+**Navigation.** The app has a nav bar with Home, Learn, Social, Leaderboard and Profile, plus ⚙ Settings. It sits at the top on desktop/web widths (≥760px) and becomes a bottom tab bar on phones (`src/ui/nav/AppNav.tsx`). It's hidden during games, lessons, daily puzzles, replays and while spectating. Home stays focused on play modes, Learn and recent games. The piece-set, board, sound and how-to controls moved into Settings, and a "How to play" link stays under the logo. Deep links: `?settings`, `?social` / `?social=live`, `?leaderboard`.
 
-- **Profile:**
+- **Profile** (nav → Profile):
   - avatar picker (16 symbols, or your initial) and display-name edit;
   - rating with a **rating-history chart** (rated games, from `GET /api/my/profile`);
   - W/L/D, win rate, current and best win streak;
-  - learning-path badges and the piece-skin selector;
+  - a "Badges & skins" shortcut;
   - recent games (online and local merged), each linking to its review.
 
   Guests and offline players get the same profile built from games saved on the device (`src/ui/settings/stats.ts`), plus a "create a free account" prompt.
-- **Friends** (accounts only; guests are asked to sign up):
-  - search players by name;
-  - send, accept, decline or cancel requests, and remove friends;
-  - each friend shows a **live presence** dot: online, in a game or in a rated game;
-  - **Watch** a friend's game, or **Challenge** a friend who is online.
-- **Settings:**
+- **Badges & skins** (the Collection tab next to Profile and Settings; `src/ui/settings/CollectionTab.tsx`):
+  - collection summary (badges and skins owned, current pairing);
+  - piece-skin selector for white and black, showing which badge unlocks each locked skin;
+  - Arcane/Classic set switch;
+  - every badge with its description, earned date and skin reward, filterable by All / Earned / To earn;
+  - a link to the Learn path.
+- **Social** (nav → Social; `src/ui/social/SocialScreen.tsx`): Friends and Live games. They're sub-tabs on phones and two columns on wide screens.
+  - **Friends** (accounts only; guests are asked to sign up):
+    - search players by name;
+    - send, accept, decline or cancel requests, and remove friends;
+    - each friend shows a **live presence** dot: online, in a game or in a rated game;
+    - **Watch** a friend's game, or **Challenge** a friend who is online.
+  - **Live games:** see below.
+- **Leaderboard** (nav → Leaderboard; `src/ui/social/LeaderboardScreen.tsx`):
+  - a podium for the top three, then the top 50;
+  - your own rank card;
+  - an Everyone / ★ Friends filter.
+- **Online lobby:** Quick Match, Play a friend, your recent online games, and links to Friends, Live games and the Leaderboard. It no longer duplicates them.
+- **Settings** (nav → ⚙):
   - Board: 2D/3D default, piece set, legal-move hints, **confirm moves** (stage a move, then press Play ✓).
   - Sound: master sound, effects volume, generative ambient music (default off), vibration.
   - Notifications: placeholder toggles, marked PREVIEW (push is in `BACKLOG.md`).
@@ -317,8 +330,8 @@ Open it from the **avatar** (profile) or **gear** (settings) at the top of Home,
   - the target must be online and not already in a game;
   - one outstanding challenge per player.
 
-  A challenge creates a private, unrated room with the friend as the invitee. They get an Accept/Decline card with a 60 s countdown, and accepting seats them and starts the game. A decline, timeout or the challenger leaving closes the room.
-- **Live games** (Online screen):
+  A challenge creates a private, unrated room with the friend as the invitee. Challenges stay open for **5 minutes** (`CHALLENGE_TTL_MS` in `src/net/protocol.ts`; the server's `CHALLENGE_TTL_MS` env var overrides it). The friend gets an Accept/Decline card with an m:ss countdown, and the challenger sees the same countdown in the waiting room. Accepting seats them and starts the game. A decline, timeout or the challenger leaving closes the room.
+- **Live games** (Social page):
   - games in progress, highest average rating first;
   - friends' games highlighted;
   - filters: All / Rated / Casual / Friends;
@@ -330,19 +343,23 @@ Open it from the **avatar** (profile) or **gear** (settings) at the top of Home,
   - `server/test/social.test.ts`:
     - friend lifecycle, search, guest rules, friends leaderboard;
     - presence and social pushes;
-    - challenge accept/decline/cancel/offline/busy;
+    - challenge accept/decline/cancel/offline/busy, the 5-minute TTL and expiry;
     - live list ordering, privacy, spectators and the delayed ranked view;
     - profile, rating history, streaks, password change, account deletion.
-  - `tests/social.test.ts`: local stats, avatars, settings store.
+  - `tests/social.test.ts`: local stats, avatars, settings store, challenge countdown.
 - **Screenshots:** `npx tsx scripts/social-shots.ts`. It starts an in-memory server on 8798 and a preview on 4320, seeds eight accounts with friendships, rated history and live bot-driven games, and writes `screenshots/social-*.png`.
 
-| Settings | Profile + rating chart | Friends + presence | Friend request | Challenge |
+| Home (mobile) | Leaderboard | Social: friends | Social: live games | Badges & skins |
 |---|---|---|---|---|
-| ![](docs/screenshots/social-settings.jpg) | ![](docs/screenshots/social-profile.jpg) | ![](docs/screenshots/social-friends.jpg) | ![](docs/screenshots/social-friend-request.jpg) | ![](docs/screenshots/social-challenge.jpg) |
+| ![](docs/screenshots/social-home.jpg) | ![](docs/screenshots/social-leaderboard.jpg) | ![](docs/screenshots/social-friends.jpg) | ![](docs/screenshots/social-live.jpg) | ![](docs/screenshots/social-collection.jpg) |
 
-| Challenge sent | Live games | Spectating | Home |
-|---|---|---|---|
-| ![](docs/screenshots/social-challenge-sent.jpg) | ![](docs/screenshots/social-live.jpg) | ![](docs/screenshots/social-spectate.jpg) | ![](docs/screenshots/social-home.jpg) |
+| Profile + rating chart | Settings | Friend request | Challenge | Challenge sent | Spectating |
+|---|---|---|---|---|---|
+| ![](docs/screenshots/social-profile.jpg) | ![](docs/screenshots/social-settings.jpg) | ![](docs/screenshots/social-friend-request.jpg) | ![](docs/screenshots/social-challenge.jpg) | ![](docs/screenshots/social-challenge-sent.jpg) | ![](docs/screenshots/social-spectate.jpg) |
+
+| Home (desktop) | Social (desktop) | Leaderboard (desktop) |
+|---|---|---|
+| ![](docs/screenshots/social-home-desktop.jpg) | ![](docs/screenshots/social-social-desktop.jpg) | ![](docs/screenshots/social-leaderboard-desktop.jpg) |
 
 ## Rule decisions made for the MVP
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { api, startApp, TestClient, type App } from './helpers';
-import type { ChallengeInfo, LiveGame, ServerMsg } from '../../src/net/protocol';
+import { CHALLENGE_TTL_MS, type ChallengeInfo, type LiveGame, type ServerMsg } from '../../src/net/protocol';
 
 let app: App | null = null;
 afterEach(async () => { await app?.close(); app = null; });
@@ -158,6 +158,39 @@ describe('challenges', () => {
     expect(await b.waitFor((m) => m.t === 'challengeUpdate' && m.id === ch2.id, 8000, 0)).toMatchObject({ status: 'cancelled', by: 'Ada' });
     b.send({ t: 'challengeReply', id: ch2.id, accept: true });
     expect(await b.waitFor((m) => m.t === 'error' && m.code === 'challenge', 8000, 0)).toMatchObject({ message: /no longer open/ });
+  });
+});
+
+describe('challenge expiry', () => {
+  it('challenges stay open for 5 minutes by default and expire (closing the room) when the TTL lapses', async () => {
+    let s = await startApp(); app = s.app;
+    let ada = await account(s.base, 'Ada');
+    let bob = await account(s.base, 'Bobby');
+    await befriend(s.base, ada, bob, ada.id);
+    let a = await online(s.port, ada.token);
+    let b = await online(s.port, bob.token);
+    const t0 = Date.now();
+    a.send({ t: 'challenge', userId: bob.id });
+    const ch = ((await b.waitFor(is('challenge'), 8000, 0)) as Extract<ServerMsg, { t: 'challenge' }>).challenge;
+    expect(CHALLENGE_TTL_MS).toBe(5 * 60_000);
+    expect(ch.expiresAt - t0).toBeGreaterThan(CHALLENGE_TTL_MS - 5000);
+    expect(ch.expiresAt - t0).toBeLessThanOrEqual(CHALLENGE_TTL_MS + 1000);
+    await a.close(); await b.close();
+    await app.close();
+
+    // Short TTL to watch it lapse: both sides are told, the waiting room closes.
+    s = await startApp({ challengeTtlMs: 300 }); app = s.app;
+    ada = await account(s.base, 'Ada');
+    bob = await account(s.base, 'Bobby');
+    await befriend(s.base, ada, bob, ada.id);
+    a = await online(s.port, ada.token);
+    b = await online(s.port, bob.token);
+    a.send({ t: 'challenge', userId: bob.id });
+    const ch2 = ((await b.waitFor(is('challenge'), 8000, 0)) as Extract<ServerMsg, { t: 'challenge' }>).challenge;
+    expect(await a.waitFor(is('challengeUpdate'), 8000, 0)).toMatchObject({ id: ch2.id, status: 'expired' });
+    expect(await b.waitFor(is('challengeUpdate'), 8000, 0)).toMatchObject({ id: ch2.id, status: 'expired' });
+    await a.waitFor(is('left'), 8000, 0);
+    expect(s.app.hub.rooms.size).toBe(0);
   });
 });
 

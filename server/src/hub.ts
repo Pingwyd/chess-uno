@@ -18,7 +18,6 @@ import { Social, friendInfo } from './social';
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const HELLO_TIMEOUT_MS = 10_000;
 const FINISHED_ROOM_TTL_MS = 10 * 60_000;
-export const CHALLENGE_TTL_MS = 60_000;
 const LIVE_THROTTLE_MS = 1000;
 
 interface QueueEntry { client: Client; rated: boolean; rating: number; since: number }
@@ -425,9 +424,9 @@ export class Hub {
     this.rooms.set(room.code, room);
     this.userRoom.set(me.id, room.code);
     const info: ChallengeInfo = {
-      id: randomUUID(), from: friendInfo(me), to: friendInfo(target.user), code: room.code, expiresAt: this.now() + CHALLENGE_TTL_MS,
+      id: randomUUID(), from: friendInfo(me), to: friendInfo(target.user), code: room.code, expiresAt: this.now() + this.cfg.challengeTtlMs,
     };
-    const timer = setTimeout(() => this.lapseChallenge(info.id, 'expired'), CHALLENGE_TTL_MS);
+    const timer = setTimeout(() => this.lapseChallenge(info.id, 'expired'), this.cfg.challengeTtlMs);
     timer.unref?.();
     this.challenges.set(info.id, { info, timer });
     client.send({ t: 'roomCreated', code: room.code, invitee: info.to });

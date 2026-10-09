@@ -286,7 +286,7 @@ Every finished game can be replayed, and the replay **doubles as a review**:
 
 | Feature | Details |
 |---|---|
-| **Friend invites** | Share a link (`chessuno.app/c/AB12CD`) that opens a challenge. Friend requests and an online/in-game status list |
+| **Friend invites** | Share a link (`chessuno.app/c/AB12CD`) that opens a challenge. Friend requests and an online/in-game status list. **[Built]** Direct challenges to an online friend open a private unrated room. The friend gets an in-app Accept/Decline card, and the challenge **expires after 5 minutes** |
 | **Chat** | Quick emotes (GG, 👏, 😮, 😂, "Nice Reverse!") plus regular text chat. Profanity filter, mute, and report. Text chat can be turned off in settings |
 | **Live Games** | A list of games in progress, **sorted by highest rating first**, filterable by friends or featured games, with spectator counts |
 | **Spectator links** | Share-to-watch links (`chessuno.app/w/XY98ZT`) that open a specific game straight away. **[Proposed]** Ranked games are shown to spectators with a 1-turn delay to prevent cheating. Spectators can see how many cards each player holds, but not which ones |

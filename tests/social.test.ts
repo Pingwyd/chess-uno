@@ -72,3 +72,17 @@ describe('settings store', () => {
     expect(calls).toBe(2);
   });
 });
+
+describe('challenge countdown', () => {
+  it('formats the remaining time as m:ss and lasts 5 minutes', async () => {
+    const { countdown } = await import('../src/ui/social/countdown');
+    const { CHALLENGE_TTL_MS } = await import('../src/net/protocol');
+    expect(CHALLENGE_TTL_MS).toBe(300_000);
+    expect(countdown(CHALLENGE_TTL_MS)).toBe('5:00');
+    expect(countdown(299_001)).toBe('5:00');
+    expect(countdown(299_000)).toBe('4:59');
+    expect(countdown(61_000)).toBe('1:01');
+    expect(countdown(9_500)).toBe('0:10');
+    expect(countdown(-5)).toBe('0:00');
+  });
+});

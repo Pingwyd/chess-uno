@@ -16,6 +16,9 @@ export type EmoteId = keyof typeof EMOTES;
 export const CHAT_MAX_LENGTH = 200;
 
 /** Profile avatars: a symbol from this list, or null for the name's initial. */
+/** How long a friend challenge stays open before it expires (server default; `CHALLENGE_TTL_MS` env overrides). */
+export const CHALLENGE_TTL_MS = 5 * 60_000;
+
 export const AVATARS = ['♞', '♛', '♜', '♝', '♚', '♟', '🃏', '🔥', '🌊', '⚡', '🌙', '⭐', '🦊', '🐉', '🦉', '👑'] as const;
 export type AvatarId = (typeof AVATARS)[number];
 export const isAvatar = (v: unknown): v is AvatarId => typeof v === 'string' && (AVATARS as readonly string[]).includes(v);

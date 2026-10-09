@@ -4,30 +4,20 @@ import type { BotLevel } from '../engine/bot';
 import { CardFace } from './Card';
 import { Piece, type PieceSet } from './pieces';
 import type { GameSetup } from './useGame';
-import { has3D, type BoardMode } from './BoardView';
 import { useProgress } from '../learn/store';
 import { OUTLINE_SHAPE as PATH_SHAPE, lessonTitle } from '../learn/outline';
 import { localDay, nextLesson, pathOrder, streak, utcDay } from '../learn/progress';
 import type { LearnTab } from './learn/LearnScreen';
 import { RecentGames, type OpenReplay } from './RecentGames';
 import { HowToPlay } from './HowToPlay';
-import type { SettingsTab } from './settings/SettingsScreen';
-import { useSettings } from './settings/store';
-import { Avatar } from './social/Avatar';
-import { useOnline } from './social/useOnline';
 
+/** Home stays focused: play modes, Learn and recent games. Profile, settings, social and rankings live in the app nav. */
 interface Props {
   pieceSet: PieceSet;
-  sound: boolean;
-  boardMode: BoardMode;
-  onBoardMode: (m: BoardMode) => void;
-  onPieceSet: (s: PieceSet) => void;
-  onSound: (on: boolean) => void;
   onStart: (setup: GameSetup) => void;
   onOnline: () => void;
   onLearn: (tab: LearnTab) => void;
   onReplay: OpenReplay;
-  onSettings: (tab: SettingsTab) => void;
 }
 
 const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
@@ -36,11 +26,8 @@ const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
   { id: 'hard', name: 'Rook', blurb: 'Hard', piece: 'R' },
 ];
 
-export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn, onReplay, onSettings }: Props) {
+export function Home({ pieceSet, onStart, onOnline, onLearn, onReplay }: Props) {
   const progress = useProgress();
-  const view = useOnline();
-  const settings = useSettings();
-  const pending = (view.friends?.incoming.length ?? 0);
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
   const [rules, setRules] = useState(false);
@@ -52,14 +39,6 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
 
   return (
     <div className="home" data-testid="home">
-      <div className="home-top">
-        <button className="home-me" onClick={() => onSettings('profile')} aria-label="Profile" data-testid="open-profile">
-          <Avatar name={view.user?.name ?? 'You'} avatar={view.user?.avatar ?? settings.avatar} size={38} />
-          {view.user && !view.user.guest && <span className="home-me-text"><b>{view.user.name}</b><small>{view.user.rating}</small></span>}
-          {pending > 0 && <i className="tab-badge">{pending}</i>}
-        </button>
-        <button className="icon-btn gear" onClick={() => onSettings('settings')} aria-label="Settings" data-testid="open-settings">⚙</button>
-      </div>
       <div className="hero">
         <div className="hero-art">
           <div className="hero-card hc1"><CardFace kind="3" size="md" /></div>
@@ -73,6 +52,7 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
           <span className="logo-uno">UNO</span>
         </h1>
         <p className="tagline">Draw a card. Make that many moves. Outwit the deck.</p>
+        <button className="link-btn how-link" onClick={() => setRules(true)} data-testid="how-to-play">How to play ›</button>
       </div>
 
       <LearnCard progress={progress} onLearn={onLearn} />
@@ -116,25 +96,12 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
           <div className="mode-icon">◎</div>
           <div>
             <h2>Online</h2>
-            <p>Quick Match, invite a friend by link or code, watch live games.</p>
+            <p>Quick Match or invite a friend by link or code.</p>
           </div>
         </button>
       </div>
 
       <RecentGames onOpen={onReplay} />
-
-      <div className="home-foot">
-        <div className="seg seg-small" role="radiogroup" aria-label="Piece set">
-          <button className={`seg-btn ${pieceSet === 'arcane' ? 'on' : ''}`} onClick={() => onPieceSet('arcane')}>Arcane Forge</button>
-          <button className={`seg-btn ${pieceSet === 'classic' ? 'on' : ''}`} onClick={() => onPieceSet('classic')}>Classic</button>
-        </div>
-        <div className="seg seg-small seg-board" role="radiogroup" aria-label="Board">
-          <button className={`seg-btn ${boardMode === '2d' ? 'on' : ''}`} onClick={() => onBoardMode('2d')} data-testid="board-2d">2D board</button>
-          <button className={`seg-btn ${boardMode === '3d' ? 'on' : ''}`} onClick={() => onBoardMode('3d')} disabled={!has3D()} title={has3D() ? '' : 'WebGL is not available on this device'} data-testid="board-3d-opt">3D board</button>
-        </div>
-        <button className="btn ghost small" onClick={() => onSound(!sound)}>{sound ? '🔊 Sound on' : '🔈 Sound off'}</button>
-        <button className="btn ghost small" onClick={() => setRules(true)}>How to play</button>
-      </div>
 
       {rules && (
         <div className="overlay" onClick={() => setRules(false)}>

@@ -16,17 +16,21 @@ export type LearnTab = 'path' | 'daily' | 'badges';
 interface Props extends BoardEnv {
   initialTab?: LearnTab;
   onHome: () => void;
+  /** A lesson or puzzle is open (the app hides its navigation). */
+  onPlaying?: (playing: boolean) => void;
 }
 
 const UNIT_BADGE: Record<string, string> = { basics: 'board-ready', cards: 'card-shark', check: 'patient-hunter', actions: 'turntable', strategy: 'graduate' };
 const WIGGLE = [0, 56, 84, 56, 0, -56, -84, -56];
 
-export default function LearnScreen({ initialTab = 'path', onHome, ...env }: Props) {
+export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ...env }: Props) {
   const progress = useProgress();
   const sync = useSyncState();
   const [tab, setTab] = useState<LearnTab>(initialTab);
   const [playing, setPlaying] = useState<{ lesson: Lesson; mode: PlayMode } | null>(null);
   useEffect(() => { void pullProgress(); }, []);
+  useEffect(() => { onPlaying?.(!!playing); }, [playing, onPlaying]);
+  useEffect(() => () => onPlaying?.(false), [onPlaying]);
 
   const today = localDay();
   const utc = utcDay();

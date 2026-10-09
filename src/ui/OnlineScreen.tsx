@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { getOnlineClient, OnlineTransport, SERVER_URL, type MyOnlineGame, type OnlineView } from '../net/online';
 import { outcome, when, type OpenReplay } from './RecentGames';
-import { normalizeCode, type PublicUser } from '../net/protocol';
+import { CHALLENGE_TTL_MS, normalizeCode, type PublicUser } from '../net/protocol';
+import { countdown } from './social/countdown';
 import { GameScreen, type OnlineBinding } from './GameScreen';
 import type { PieceSet } from './pieces';
 import type { BoardMode } from './BoardView';
@@ -9,8 +10,8 @@ import { useProgress } from '../learn/store';
 import { OUTLINE_SHAPE as PATH_SHAPE } from '../learn/outline';
 import { pathOrder } from '../learn/progress';
 import { AuthModal } from './AuthModal';
-import { LiveGames } from './social/LiveGames';
-import { Avatar, presenceText } from './social/Avatar';
+import type { SocialTab } from './social/SocialScreen';
+import { Avatar } from './social/Avatar';
 import type { FriendInfo } from '../net/protocol';
 import './social/social.css';
 
@@ -24,14 +25,15 @@ interface Props {
   onHome: () => void;
   intent: OnlineIntent;
   onReplay: OpenReplay;
-  /** Open Settings → Friends. */
-  onFriends: () => void;
+  /** Open the Social page (friends / live games) or the Leaderboard page. */
+  onSocial: (tab: SocialTab) => void;
+  onLeaderboard: () => void;
 }
 
 const client = getOnlineClient();
 const useOnline = (): OnlineView => useSyncExternalStore((f) => client.subscribe(f), () => client.view);
 
-export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent, onReplay, onFriends }: Props) {
+export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent, onReplay, onSocial, onLeaderboard }: Props) {
   const view = useOnline();
   const [bootError, setBootError] = useState<string | null>(null);
   const transport = useMemo(() => new OnlineTransport(client), []);
@@ -77,10 +79,10 @@ export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePiece
       />
     );
   }
-  return <Lobby view={view} bootError={bootError} onHome={onHome} onReplay={onReplay} onFriends={onFriends} />;
+  return <Lobby view={view} bootError={bootError} onHome={onHome} onReplay={onReplay} onSocial={onSocial} onLeaderboard={onLeaderboard} />;
 }
 
-function Lobby({ view, bootError, onHome, onReplay, onFriends }: { view: OnlineView; bootError: string | null; onHome: () => void; onReplay: OpenReplay; onFriends: () => void }) {
+function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: { view: OnlineView; bootError: string | null; onHome: () => void; onReplay: OpenReplay; onSocial: (t: SocialTab) => void; onLeaderboard: () => void }) {
   const [auth, setAuth] = useState<'login' | 'signup' | null>(null);
   const [code, setCode] = useState('');
   const user = view.user;
@@ -157,9 +159,7 @@ function Lobby({ view, bootError, onHome, onReplay, onFriends }: { view: OnlineV
             </form>
           </section>
 
-          {!bootError && <FriendsCard view={view} ready={ready} onFriends={onFriends} />}
-          {!bootError && <LiveGames onWatch={(c) => client.spectate(c)} />}
-          <Leaderboard me={user} />
+          {!bootError && <LobbyLinks view={view} onSocial={onSocial} onLeaderboard={onLeaderboard} />}
           {user && <MyGames me={user} onReplay={onReplay} />}
         </div>
       )}
@@ -191,13 +191,13 @@ function WaitingRoom({ code, invitee, since }: { code: string; invitee?: FriendI
   const [now, setNow] = useState(Date.now());
   useEffect(() => { if (!invitee) return; const id = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(id); }, [invitee]);
   if (invitee) {
-    const left = Math.max(0, 60 - Math.floor((now - (since ?? now)) / 1000));
     return (
       <section className="lobby-card waiting challenge-wait" data-testid="challenge-wait">
         <Avatar name={invitee.name} avatar={invitee.avatar} size={72} />
         <h2>Challenge sent</h2>
         <p>Waiting for <b>{invitee.name}</b> ({invitee.rating}) to accept… The game starts the moment they do.</p>
-        <div className="cw-timer">{left}s</div>
+        <div className="cw-timer" data-testid="challenge-wait-timer">{countdown((since ?? now) + CHALLENGE_TTL_MS - now)}</div>
+        <small className="cw-note">The invite expires in {CHALLENGE_TTL_MS / 60_000} minutes.</small>
         <div className="spinner big" />
         <button className="btn ghost" onClick={() => client.leave()} data-testid="challenge-cancel">Cancel challenge</button>
       </section>
@@ -248,72 +248,31 @@ function MyGames({ me, onReplay }: { me: PublicUser; onReplay: OpenReplay }) {
   );
 }
 
-function Leaderboard({ me }: { me: PublicUser | null }) {
-  const [rows, setRows] = useState<PublicUser[] | null>(null);
-  const [scope, setScope] = useState<'all' | 'friends'>('all');
-  const account = !!me && !me.guest;
-  useEffect(() => {
-    setRows(null);
-    client.leaderboard(scope === 'friends' && account ? 'friends' : 'all').then(setRows).catch(() => setRows([]));
-  }, [me?.rating, scope, account]);
-  return (
-    <section className="lobby-card leaderboard" data-testid="leaderboard">
-      <div className="card-head">
-        <h2>Leaderboard</h2>
-        {account && (
-          <div className="fchips">
-            <button className={`fchip ${scope === 'all' ? 'on' : ''}`} onClick={() => setScope('all')} data-testid="lb-all">Everyone</button>
-            <button className={`fchip ${scope === 'friends' ? 'on' : ''}`} onClick={() => setScope('friends')} data-testid="lb-friends">★ Friends</button>
-          </div>
-        )}
-      </div>
-      {rows === null ? <p>Loading…</p> : rows.length === 0 ? <p>No rated games yet. Sign up and play a Quick Match to get on the board.</p> : (
-        <ol>
-          {rows.slice(0, 10).map((u, i) => (
-            <li key={u.id} className={u.id === me?.id ? 'me' : ''}>
-              <span className="lb-rank">{i + 1}</span>
-              <span className="lb-name"><Avatar name={u.name} avatar={u.avatar} size={22} /> {u.name}</span>
-              <span className="lb-rating">{u.rating}</span>
-            </li>
-          ))}
-        </ol>
-      )}
-    </section>
-  );
-}
-
-/** Friends at a glance in the lobby: who's online, challenge or watch them. */
-function FriendsCard({ view, ready, onFriends }: { view: OnlineView; ready: boolean; onFriends: () => void }) {
+/** Friends, live games and rankings have their own pages now; the lobby links to them. */
+function LobbyLinks({ view, onSocial, onLeaderboard }: { view: OnlineView; onSocial: (t: SocialTab) => void; onLeaderboard: () => void }) {
   const user = view.user;
-  if (!user) return null;
-  if (user.guest) {
-    return (
-      <section className="lobby-card friends-card">
-        <div className="card-head"><h2>Friends</h2></div>
-        <p>Sign up to add friends, see when they’re online and challenge them directly.</p>
-      </section>
-    );
-  }
-  const list = view.friends?.friends ?? [];
-  const live = list.filter((f) => f.presence && f.presence.status !== 'offline');
+  const account = !!user && !user.guest;
+  const friends = view.friends?.friends ?? [];
+  const on = friends.filter((f) => f.presence && f.presence.status !== 'offline').length;
   const req = view.friends?.incoming.length ?? 0;
   return (
-    <section className="lobby-card friends-card" data-testid="lobby-friends">
-      <div className="card-head">
-        <h2>Friends</h2>
-        <button className="link-btn" onClick={onFriends} data-testid="lobby-friends-all">{req ? <span className="count-pill">{req} new</span> : null} All {list.length} ›</button>
-      </div>
-      {!list.length ? <p>No friends yet — find players by name in Friends.</p> : !live.length ? <p>None of your {list.length} friends are online right now.</p> : live.slice(0, 4).map((f) => (
-        <div key={f.id} className="friend-row compact">
-          <Avatar name={f.name} avatar={f.avatar} size={34} presence={f.presence} />
-          <div className="fr-main"><b>{f.name} <small className="fr-rating">{f.rating}</small></b><small><span className={`ps ps-${f.presence!.status}`}>{presenceText(f.presence)}</span></small></div>
-          <div className="fr-actions">
-            {f.presence!.status === 'playing' && f.presence!.code
-              ? <button className="btn tiny" onClick={() => client.spectate(f.presence!.code!)} data-testid={`lobby-watch-${f.name}`}>👁 Watch</button>
-              : <button className="btn tiny primary" disabled={!ready || view.lobby.kind !== 'idle'} onClick={() => client.challenge(f.id)} data-testid={`lobby-challenge-${f.name}`}>⚔ Challenge</button>}
-          </div>
-        </div>
-      ))}
+    <section className="lobby-card lobby-links" data-testid="lobby-links">
+      <button className="lobby-link" onClick={() => onSocial('friends')} data-testid="lobby-to-friends">
+        <span>🤝</span>
+        <span className="ll-text"><b>Friends {req > 0 && <span className="count-pill">{req} new</span>}</b>
+          <small>{!account ? 'Sign up to add friends and challenge them' : friends.length ? `${on} of ${friends.length} online · challenge or watch` : 'Find players by name'}</small></span>
+        <span className="chev">›</span>
+      </button>
+      <button className="lobby-link" onClick={() => onSocial('live')} data-testid="lobby-to-live">
+        <span>📡</span>
+        <span className="ll-text"><b>Live games</b><small>Watch games in progress — top-rated first</small></span>
+        <span className="chev">›</span>
+      </button>
+      <button className="lobby-link" onClick={onLeaderboard} data-testid="lobby-to-leaderboard">
+        <span>🏆</span>
+        <span className="ll-text"><b>Leaderboard</b><small>{account ? `You: ${user!.rating}` : 'Top rated players'}</small></span>
+        <span className="chev">›</span>
+      </button>
     </section>
   );
 }

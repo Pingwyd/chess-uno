@@ -2,9 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { AVATARS, type ProfileInfo, type PublicUser } from '../../net/protocol';
 import { HAS_SERVER, storedToken, type MyOnlineGame } from '../../net/online';
 import { useRecentGames } from '../../replay/store';
-import { getProgress, setProgress, useProgress } from '../../learn/store';
-import { BADGES, SKIN_NAMES, equipSkin, ownedSkins, type BlackSkin, type WhiteSkin } from '../../learn/progress';
-import { Piece, type PieceSet } from '../pieces';
+import { useProgress } from '../../learn/store';
+import { BADGES, SKIN_NAMES } from '../../learn/progress';
 import { Avatar } from '../social/Avatar';
 import { RatingChart } from '../social/RatingChart';
 import { client, useOnline } from '../social/useOnline';
@@ -19,9 +18,11 @@ const pct = (s: Pick<Stats, 'w' | 'l' | 'd'>) => {
   return n ? `${Math.round(((s.w + s.d / 2) / n) * 100)}%` : '—';
 };
 
-export function ProfileTab({ pieceSet, onPieceSet, onSignUp, onReplay }: {
-  pieceSet: PieceSet; onPieceSet: (p: PieceSet) => void; onSignUp: () => void; onReplay: OpenReplay;
+export function ProfileTab({ onSignUp, onReplay, onCollection }: {
+  onSignUp: () => void; onReplay: OpenReplay; onCollection: () => void;
 }) {
+  const progress = useProgress();
+  const earned = BADGES.filter((b) => progress.badges[b.id]);
   const view = useOnline();
   const settings = useSettings();
   const user = view.user;
@@ -106,8 +107,11 @@ export function ProfileTab({ pieceSet, onPieceSet, onSignUp, onReplay }: {
         </section>
       )}
 
-      <Badges />
-      <Skins pieceSet={pieceSet} onPieceSet={onPieceSet} />
+      <button className="set-card coll-teaser" onClick={onCollection} data-testid="open-collection">
+        <span className="coll-teaser-icons">{earned.slice(0, 4).map((b) => <i key={b.id}>{b.icon}</i>)}{!earned.length && <i>🏅</i>}</span>
+        <span className="coll-teaser-text"><b>Badges &amp; skins</b><small>{earned.length}/{BADGES.length} badges · {SKIN_NAMES[progress.skins.w]} vs {SKIN_NAMES[progress.skins.b]}</small></span>
+        <span className="chev">›</span>
+      </button>
       <Recent games={games} online={online} onReplay={onReplay} />
     </div>
   );
@@ -148,59 +152,6 @@ function Stat({ label, value, sub, tone }: { label: string; value: string | numb
       <small>{label}</small>
       {sub && <em>{sub}</em>}
     </div>
-  );
-}
-
-function Badges() {
-  const p = useProgress();
-  const got = BADGES.filter((b) => p.badges[b.id]);
-  return (
-    <section className="set-card" data-testid="profile-badges">
-      <h3>Badges <small>{got.length}/{BADGES.length}</small></h3>
-      <div className="mini-badges">
-        {BADGES.map((b) => (
-          <span key={b.id} className={`mini-badge ${p.badges[b.id] ? 'got' : ''}`} title={`${b.name} — ${b.desc}`}>
-            <i>{b.icon}</i><small>{b.name}</small>
-          </span>
-        ))}
-      </div>
-      {!got.length && <p className="prof-note">Earn badges on the Learn path — some unlock piece skins.</p>}
-    </section>
-  );
-}
-
-function Skins({ pieceSet, onPieceSet }: { pieceSet: PieceSet; onPieceSet: (p: PieceSet) => void }) {
-  const p = useProgress();
-  const owned = ownedSkins(p);
-  const equip = (side: 'w' | 'b', skin: WhiteSkin | BlackSkin) => {
-    setProgress(equipSkin(getProgress(), side, skin));
-    if (pieceSet !== 'arcane') onPieceSet('arcane');
-  };
-  const lockedBy = (skin: string) => BADGES.find((b) => b.reward?.skin === skin);
-  return (
-    <section className="set-card" data-testid="profile-skins">
-      <h3>Piece skin</h3>
-      <div className="seg seg-small">
-        <button className={`seg-btn ${pieceSet === 'arcane' ? 'on' : ''}`} onClick={() => onPieceSet('arcane')}>Arcane Forge</button>
-        <button className={`seg-btn ${pieceSet === 'classic' ? 'on' : ''}`} onClick={() => onPieceSet('classic')}>Classic</button>
-      </div>
-      {(['w', 'b'] as const).map((side) => (
-        <div key={side} className="prof-skins">
-          {(side === 'w' ? (['ember', 'frost', 'gilded'] as const) : (['tide', 'rose', 'aurora'] as const)).map((skin) => {
-            const has = (owned[side] as string[]).includes(skin);
-            const on = p.skins[side] === skin && pieceSet === 'arcane';
-            return (
-              <button key={skin} className={`pskin skin-w-${side === 'w' ? skin : 'ember'} skin-b-${side === 'b' ? skin : 'tide'} ${on ? 'on' : ''}`} disabled={!has}
-                onClick={() => equip(side, skin)} data-testid={`pskin-${skin}`}>
-                <span className="pskin-pieces"><Piece piece={side === 'w' ? 'K' : 'k'} set="arcane" /><Piece piece={side === 'w' ? 'N' : 'n'} set="arcane" /></span>
-                <b>{SKIN_NAMES[skin]}</b>
-                <small>{on ? 'Equipped' : has ? 'Equip' : `🔒 ${lockedBy(skin)?.name ?? ''}`}</small>
-              </button>
-            );
-          })}
-        </div>
-      ))}
-    </section>
   );
 }
 
