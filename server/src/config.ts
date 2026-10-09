@@ -24,7 +24,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     databaseUrl: env.DATABASE_URL ?? 'sqlite:./data/chess-uno.db',
     jwtSecret,
     clockMs: Number(env.CLOCK_MS ?? 10 * 60 * 1000),
-    disconnectGraceMs: Number(env.DISCONNECT_GRACE_MS ?? 60_000),
+    disconnectGraceMs: Number(env.DISCONNECT_GRACE_MS ?? 90_000),
     corsOrigin: env.CORS_ORIGIN ?? '*',
     matchWindow: Number(env.MATCH_WINDOW ?? 100),
     matchWidenPerSec: Number(env.MATCH_WIDEN_PER_SEC ?? 25),

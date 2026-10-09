@@ -21,7 +21,7 @@ async function freshDatabaseUrl(): Promise<string> {
 }
 
 export async function startApp(over: Parameters<typeof createApp>[0] = {}) {
-  const app = await createApp({ databaseUrl: await freshDatabaseUrl(), jwtSecret: 'test-secret', clockMs: 600_000, disconnectGraceMs: 60_000, ...over });
+  const app = await createApp({ databaseUrl: await freshDatabaseUrl(), jwtSecret: 'test-secret', clockMs: 600_000, disconnectGraceMs: 90_000, ...over });
   const port = await app.listen(0);
   return { app, port, base: `http://localhost:${port}` };
 }

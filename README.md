@@ -95,7 +95,7 @@ BASE_URL=http://localhost:4310 node scripts/online-e2e.mjs   # Playwright: invit
 
 - **Authoritative server** (`server/`, Node + TypeScript + `ws`). It imports the same pure rules engine as the client (`src/rules`). The server holds the seeded deck, applies every action through `applyAction`, rejects illegal or out-of-turn actions (and pause, which is offline-only), runs both clocks (a timer fires at flag fall), and decides the result. Clients only send intents and render the snapshots they get back.
 - **No peeking:** each player gets a redacted snapshot. The draw-pile order and RNG state are never sent, and the opponent's held Skip/Reverse cards (including the overflow card and draw events) are masked, so you only see how many cards they hold. When the game ends, the deck seed is published, and the stored action log replays to the same result, so the shuffle can be verified.
-- **Reconnect:** the client keeps the token in `localStorage` and reconnects with backoff. The server re-attaches you to your active game and resends the full state. Opening a second tab takes over the session. If a player stays away longer than the grace period (60 s by default; the opponent sees a countdown), the game is lost by abandonment. Their clock keeps running meanwhile.
+- **Reconnect:** the client keeps the token in `localStorage` and reconnects with backoff. The server re-attaches you to your active game and resends the full state. Opening a second tab takes over the session. If a player stays away longer than the grace period (90 s by default; the opponent sees a countdown), the game is lost by abandonment. Their clock keeps running meanwhile.
 - **Accounts:** you can play as a guest instantly with a generated name such as *SwiftKnight123*. Email+password signup or login uses bcrypt and a JWT that lasts 30 days, and signing up from a guest session upgrades that guest, keeping its stats. Auth endpoints are rate-limited per IP.
 - **Ratings:** Elo starting at 1200. K is 32 for your first 20 rated games, then 20. Only rated online games count. Rated **Quick Match** needs an account; guests are matched into a casual queue. Matching pairs the closest rating within ±100, and the window widens by 25 per second of waiting.
 - **Private rooms:** unrated. **Create invite link** gives a 6-character code and a `?join=CODE` link. **Join** accepts a code or a pasted link.
@@ -113,7 +113,7 @@ BASE_URL=http://localhost:4310 node scripts/online-e2e.mjs   # Playwright: invit
 | `JWT_SECRET` | server | dev-only fallback | **Required in production** (the server refuses to start with `NODE_ENV=production` and no secret) |
 | `CORS_ORIGIN` | server | `*` | Set to your client's origin in production |
 | `CLOCK_MS` | server | `600000` | Per-player clock (10 min) |
-| `DISCONNECT_GRACE_MS` | server | `60000` | How long a disconnected player has before forfeiting |
+| `DISCONNECT_GRACE_MS` | server | `90000` | How long a disconnected player has before forfeiting (1m30s) |
 | `MATCH_WINDOW` / `MATCH_WIDEN_PER_SEC` | server | `100` / `25` | Quick Match rating window and how fast it widens |
 | `VITE_SERVER_URL` | client (build time) | `http://localhost:8787` | Base URL of the game server; `ws(s)://…/ws` is derived from it |
 

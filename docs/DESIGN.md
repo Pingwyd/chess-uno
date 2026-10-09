@@ -308,7 +308,7 @@ Every finished game can be replayed, and the replay **doubles as a review**:
 - The shared **`rules` package** (pure, deterministic TypeScript) checks move legality, card effects, and game-end conditions. It runs on the client for instant feedback and on the server as the source of truth.
 - **The server owns the deck.** Each game is shuffled with a secret random seed, which the server publishes after the game so anyone can verify the shuffle was fair. Clients only ever receive cards that have been revealed.
 - **The server runs the clocks.** Turn timestamps are measured on the server, and clients display a predicted countdown. Lag compensation is capped at about 300 ms per turn.
-- **Reconnecting:** if you disconnect, you get 60 seconds to rejoin while your clock keeps running. If you don't return, you lose by abandonment.
+- **Reconnecting:** if you disconnect, you get 90 seconds (1m30s) to rejoin while your clock keeps running. If you don't return, you lose by abandonment.
 - **Move flow:** client sends a move intent → server validates it → server applies it → server broadcasts the new game state to both players and spectators.
 
 ```

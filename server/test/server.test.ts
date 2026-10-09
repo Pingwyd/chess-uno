@@ -3,6 +3,7 @@ import { api, privateGame, startApp, TestClient, type App } from './helpers';
 import { botStep } from '../../src/engine/bot';
 import { parseSquare } from '../../src/rules/chess';
 import { updateElo, kFactor, expectedScore } from '../src/rating';
+import { loadConfig } from '../src/config';
 import type { GameAction, PlayerId } from '../../src/rules/game';
 
 let app: App | null = null;
@@ -119,6 +120,21 @@ describe('online game', () => {
     const toMove = seatToMove(a);
     const over = await a.waitSnap((x) => x.state.phase === 'over' && !!x.result, 5000);
     expect(over.state.result).toEqual({ winner: toMove === 0 ? 1 : 0, reason: 'timeout' });
+  });
+
+  it('disconnect grace defaults to 90 s (1m30s) and is advertised to the opponent', async () => {
+    expect(loadConfig({}).disconnectGraceMs).toBe(90_000);
+    expect(loadConfig({ DISCONNECT_GRACE_MS: '5000' }).disconnectGraceMs).toBe(5000);
+    const s = await startApp(); app = s.app;
+    expect(s.app.config.disconnectGraceMs).toBe(90_000);
+    const { a, b } = await privateGame(s.base, s.port);
+    const seat = b.snap!.you!;
+    const t0 = Date.now();
+    await b.close();
+    const away = await a.waitSnap((x) => !x.seats[seat].connected);
+    const left = away.seats[seat].graceUntil! - t0;
+    expect(left).toBeGreaterThan(88_000);
+    expect(left).toBeLessThanOrEqual(91_000);
   });
 
   it('reconnect resyncs state, and a player who stays away forfeits after the grace period', async () => {

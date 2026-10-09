@@ -411,6 +411,12 @@ function DeckInfo({ state }: { state: GameState }) {
 
 const EMOTE_TEXT = EMOTES;
 
+/** Seconds left as m:ss (e.g. 1:30). */
+const fmtCountdown = (ms: number) => {
+  const t = Math.max(0, Math.ceil(ms / 1000));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+};
+
 function SeatBadge({ snap, seat, now }: { snap: RoomSnapshot; seat: PlayerId; now: number }) {
   const info = snap.seats[seat];
   const away = !info.connected && info.graceUntil;
@@ -418,7 +424,7 @@ function SeatBadge({ snap, seat, now }: { snap: RoomSnapshot; seat: PlayerId; no
     <>
       <span className="rating-tag" title={info.guest ? 'Guest' : 'Rating'}>{info.guest ? 'guest' : info.rating}</span>
       {away && snap.state.phase !== 'over' && (
-        <span className="away-tag">reconnecting {Math.max(0, Math.ceil((info.graceUntil! - now) / 1000))}s</span>
+        <span className="away-tag">reconnecting {fmtCountdown(info.graceUntil! - now)}</span>
       )}
     </>
   );
