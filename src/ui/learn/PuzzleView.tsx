@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { applyAction, cardBlockReason, type GameState } from '../../rules/game';
 import type { ActionKind } from '../../rules/cards';
 import type { PromotionPiece } from '../../rules/chess';
@@ -23,7 +23,12 @@ interface Props {
   onDone: () => void;
 }
 
-const SUCCESS = ['Brilliant!', 'Correct!', 'Nicely done!', 'Great move!'];
+/** Factual success line: what the solution did ("Mate in 2 moves."). */
+function solvedLine(s: GameState): string {
+  const n = s.history.filter((t) => t.player === LEARNER).reduce((k, t) => k + t.moves.length, 0) + (s.current === LEARNER ? s.movesMade : 0);
+  const moves = `${n} move${n === 1 ? '' : 's'}`;
+  return s.result?.reason === 'checkmate' ? `Mate in ${moves}.` : n ? `Solved in ${moves}.` : 'Solved.';
+}
 
 /** One interactive puzzle: a real Chess Uno game with a fixed position and fixed cards. */
 export function PuzzleView({ puzzle, env, onMistake, onHint, onDone }: Props) {
@@ -38,7 +43,6 @@ export function PuzzleView({ puzzle, env, onMistake, onHint, onDone }: Props) {
   const [promo, setPromo] = useState<{ from: number; to: number } | null>(null);
   const [anim, setAnim] = useState<LastMoveAnim | null>(null);
   const animKey = useRef(0);
-  const praise = useMemo(() => SUCCESS[Math.floor(Math.random() * SUCCESS.length)], []);
 
   const act = (next: GameState) => {
     const before = s.events.length;
@@ -201,7 +205,7 @@ export function PuzzleView({ puzzle, env, onMistake, onHint, onDone }: Props) {
         <div className={`feedback ${verdict.ok ? 'good' : 'bad'}`} data-testid={verdict.ok ? 'feedback-correct' : 'feedback-wrong'} role="status">
           <div className="feedback-head">
             <span className="feedback-icon"><Icon name={verdict.ok ? 'check' : 'x'} size={18} strokeWidth={3} /></span>
-            <b>{verdict.ok ? (revealed ? 'Here’s one way' : praise) : 'Not quite'}</b>
+            <b>{verdict.ok ? (revealed ? 'One solution.' : solvedLine(s)) : 'Not solved.'}</b>
           </div>
           <p><Rich text={verdict.ok ? puzzle.explain : verdict.reason ?? 'That didn’t reach the goal.'} /></p>
           <div className="feedback-actions">

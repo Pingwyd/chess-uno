@@ -135,7 +135,7 @@ export const BADGES: Badge[] = [
   { id: 'card-shark', name: 'Card Shark', icon: 'spade', desc: 'Complete The cards.', reward: { side: 'w', skin: 'frost' }, earned: (p, c) => unitDone(p, unitById(c.shape, 'cards')) },
   { id: 'patient-hunter', name: 'Patient Hunter', icon: 'hourglass', desc: 'Complete Check ends your turn.', reward: { side: 'b', skin: 'rose' }, earned: (p, c) => unitDone(p, unitById(c.shape, 'check')) },
   { id: 'turntable', name: 'Turntable', icon: 'reverse', desc: 'Complete Skip & Reverse.', earned: (p, c) => unitDone(p, unitById(c.shape, 'actions')) },
-  { id: 'graduate', name: 'Graduate', icon: 'graduation-cap', desc: 'Finish the whole path. Ranked play unlocked!', reward: { side: 'w', skin: 'gilded' }, earned: (p, c) => pathDone(p, c.shape) },
+  { id: 'graduate', name: 'Graduate', icon: 'graduation-cap', desc: 'Finish the whole path. Unlocks ranked play.', reward: { side: 'w', skin: 'gilded' }, earned: (p, c) => pathDone(p, c.shape) },
   { id: 'perfectionist', name: 'Perfectionist', icon: 'star', desc: 'Earn 3 stars on 5 lessons.', earned: (p) => Object.values(p.lessons).filter((l) => l.stars === 3 && !l.tested).length >= 5 },
   { id: 'on-fire', name: 'On Fire', icon: 'flame', desc: 'Reach a 3-day streak.', earned: (p, c) => streak(p, c.today) >= 3 },
   { id: 'unstoppable', name: 'Unstoppable', icon: 'rocket', desc: 'Reach a 7-day streak.', reward: { side: 'b', skin: 'aurora' }, earned: (p, c) => streak(p, c.today) >= 7 },
@@ -166,6 +166,28 @@ export function awardBadges(p: Progress, shape: PathShape, today: string): { pro
   const badges = { ...p.badges };
   for (const id of fresh) badges[id] = today;
   return { progress: { ...p, badges, rankedUnlocked }, fresh };
+}
+
+/** How far along a badge is, for "how do I unlock this?" notes: n of total, and the lesson to play next (path badges). */
+export interface BadgeGoal { n: number; total: number; unit?: string; lesson?: string | null; kind: 'unit' | 'path' | 'streak' | 'stars' | 'daily' | 'xp' | 'lesson' }
+
+const BADGE_UNIT: Record<string, string> = { 'board-ready': 'basics', 'card-shark': 'cards', 'patient-hunter': 'check', turntable: 'actions' };
+
+export function badgeGoal(p: Progress, badgeId: string, shape: PathShape, today: string): BadgeGoal {
+  const unitId = BADGE_UNIT[badgeId];
+  if (unitId) {
+    const u = unitById(shape, unitId);
+    return { kind: 'unit', unit: unitId, n: u.lessons.filter((id) => isDone(p, id)).length, total: u.lessons.length, lesson: u.lessons.find((id) => !isDone(p, id)) ?? null };
+  }
+  switch (badgeId) {
+    case 'graduate': { const all = pathOrder(shape); return { kind: 'path', n: all.filter((id) => isDone(p, id)).length, total: all.length, lesson: nextLesson(p, shape) }; }
+    case 'on-fire': return { kind: 'streak', n: Math.min(3, streak(p, today)), total: 3 };
+    case 'unstoppable': return { kind: 'streak', n: Math.min(7, streak(p, today)), total: 7 };
+    case 'perfectionist': return { kind: 'stars', n: Math.min(5, Object.values(p.lessons).filter((l) => l.stars === 3 && !l.tested).length), total: 5, lesson: nextLesson(p, shape) };
+    case 'daily-devotee': return { kind: 'daily', n: Math.min(3, Object.keys(p.daily).length), total: 3 };
+    case 'scholar': return { kind: 'xp', n: Math.min(500, p.xp), total: 500 };
+    default: return { kind: 'lesson', n: Math.min(1, Object.keys(p.lessons).length), total: 1, lesson: nextLesson(p, shape) };
+  }
 }
 
 // ---------------------------------------------------------------- events

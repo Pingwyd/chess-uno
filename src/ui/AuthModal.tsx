@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { getOnlineClient } from '../net/online';
+import { Icon } from './icons';
 
 const client = getOnlineClient();
 
@@ -24,24 +25,28 @@ export function AuthModal({ mode, onMode, onClose }: { mode: 'login' | 'signup';
       setBusy(false);
     }
   };
+  const signup = mode === 'signup';
   return (
-    <div className="overlay" onClick={onClose}>
+    <div className="overlay auth-overlay" onClick={onClose}>
       <form className="panel auth" onClick={(e) => e.stopPropagation()} onSubmit={submit} data-testid="auth-modal">
-        <div className="seg seg-small">
-          <button type="button" className={`seg-btn ${mode === 'signup' ? 'on' : ''}`} onClick={() => onMode('signup')}>Sign up</button>
-          <button type="button" className={`seg-btn ${mode === 'login' ? 'on' : ''}`} onClick={() => onMode('login')}>Log in</button>
+        <div className="auth-top">
+          <span className="nav-brand auth-brand" aria-hidden="true"><span className="nb-chess">Chess</span><span className="nb-uno">Uno</span></span>
+          <button className="icon-btn" type="button" onClick={onClose} aria-label="Close"><Icon name="x" size={18} /></button>
         </div>
-        {mode === 'signup' && <p className="auth-note">Your guest stats carry over. Rated Quick Match unlocks with an account.</p>}
-        <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-        <label>Password<input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} /></label>
-        {mode === 'signup' && (
+        <h2 className="auth-title">{signup ? 'Create account' : 'Sign in'}</h2>
+        <p className="auth-note">{signup ? 'Your guest stats carry over. Rated quick match needs an account.' : 'Welcome back. Your rating, friends and path sync across devices.'}</p>
+        <div className="seg seg-small auth-tabs">
+          <button type="button" className={`seg-btn ${signup ? 'on' : ''}`} onClick={() => onMode('signup')}>Sign up</button>
+          <button type="button" className={`seg-btn ${!signup ? 'on' : ''}`} onClick={() => onMode('login')}>Log in</button>
+        </div>
+        <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" placeholder="you@example.com" /></label>
+        <label>Password<input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={signup ? 'new-password' : 'current-password'} placeholder={signup ? '8 characters or more' : ''} /></label>
+        {signup && (
           <label><span>Display name <small>(optional)</small></span><input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} pattern="[A-Za-z0-9 _\-]{3,20}" /></label>
         )}
         {err && <div className="auth-error">{err}</div>}
-        <div className="panel-actions">
-          <button className="btn primary" type="submit" disabled={busy}>{busy ? '…' : mode === 'signup' ? 'Create account' : 'Log in'}</button>
-          <button className="btn ghost" type="button" onClick={onClose}>Cancel</button>
-        </div>
+        <button className="btn primary wide auth-go" type="submit" disabled={busy}>{busy ? '…' : signup ? 'Create account' : 'Log in'} <Icon name="arrow-right" size={18} /></button>
+        <button className="btn ghost wide" type="button" onClick={onClose}>Cancel</button>
       </form>
     </div>
   );

@@ -19,16 +19,14 @@ export function FriendsTab({ onSignUp, onChallenge, onWatch }: {
 
   if (!HAS_SERVER) {
     return (
-      <section className="set-card cta" data-testid="friends-soon">
-        <span className="cta-icon"><Icon name="users" size={26} /></span>
+      <section className="cta" data-testid="friends-soon">
         <div><b>Friends are coming soon</b><small>Friends, challenges and live games arrive with online play. Until then: Pass &amp; Play, the bots, and the Learn path.</small></div>
       </section>
     );
   }
   if (!user || user.guest) {
     return (
-      <section className="set-card cta" data-testid="friends-guest">
-        <span className="cta-icon"><Icon name="users" size={26} /></span>
+      <section className="cta" data-testid="friends-guest">
         <div><b>Sign up to add friends</b><small>Friends need an account so they can find you. See who’s online, challenge them to a game, and watch theirs live.</small></div>
         <button className="btn primary small" onClick={onSignUp} data-testid="friends-signup">Sign up</button>
       </section>
@@ -45,7 +43,7 @@ export function FriendsTab({ onSignUp, onChallenge, onWatch }: {
       <Search />
       {!!f?.incoming.length && (
         <section className="set-card" data-testid="incoming">
-          <h3>Friend requests <span className="count-pill">{f.incoming.length}</span></h3>
+          <h3>Friend requests <small>{f.incoming.length}</small></h3>
           {f.incoming.map((u) => (
             <Row key={u.id} u={u} sub="Wants to be friends">
               <button className="btn tiny ghost" onClick={() => void act('decline', u.id)} data-testid={`decline-${u.name}`}>Decline</button>
@@ -143,7 +141,7 @@ function Search() {
           {!hits.length && !busy && <p className="prof-note">No players match “{q.trim()}”.</p>}
           {hits.map((u) => (
             <Row key={u.id} u={u} sub={u.ratedGames ? `${u.ratedGames} rated games` : 'New player'}>
-              {u.relation === 'none' && <button className="btn tiny primary" onClick={async () => { const r = await act('request', u.id); if (r) update(u.id, r); }} data-testid={`add-${u.name}`}>+ Add</button>}
+              {u.relation === 'none' && <button className="btn tiny primary" onClick={async () => { const r = await act('request', u.id); if (r) update(u.id, r); }} data-testid={`add-${u.name}`}><Icon name="user" size={13} /> Add</button>}
               {u.relation === 'outgoing' && <span className="rel-tag">Requested</span>}
               {u.relation === 'incoming' && <button className="btn tiny primary" onClick={async () => { const r = await act('accept', u.id); if (r) update(u.id, r); }}>Accept</button>}
               {u.relation === 'friends' && <span className="rel-tag ok"><Icon name="check" size={12} /> Friends</span>}

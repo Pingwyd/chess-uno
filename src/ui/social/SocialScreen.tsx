@@ -28,9 +28,9 @@ export function SocialScreen({ initialTab = 'friends', onChallenge, onWatch }: {
 
   return (
     <div className={`lobby social-screen show-${tab}`} data-testid="social">
-      <header className="lobby-bar">
-        <h1>Social</h1>
-        {HAS_SERVER && <span className={`conn conn-${view.status}`}><i />{view.status === 'online' ? `${online} friend${online === 1 ? '' : 's'} online` : 'Connecting…'}</span>}
+      <header className="page-head">
+        {HAS_SERVER ? <span className={`conn conn-${view.status}`}><i />{view.status === 'online' ? `${online} friend${online === 1 ? '' : 's'} online` : 'Connecting…'}</span> : <span className="eyebrow">Friends and live games</span>}
+        <h1 className="page-title">Social</h1>
       </header>
       <nav className="set-tabs social-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'friends'} className={`set-tab ${tab === 'friends' ? 'on' : ''}`} onClick={() => pick('friends')} data-testid="social-tab-friends">
@@ -46,8 +46,7 @@ export function SocialScreen({ initialTab = 'friends', onChallenge, onWatch }: {
         </div>
         <div className="social-col sc-live">
           {HAS_SERVER ? <LiveGames onWatch={onWatch} /> : (
-            <section className="set-card cta">
-              <span className="cta-icon"><Icon name="radio" size={26} /></span>
+            <section className="cta">
               <div><b>Live games are coming soon</b><small>Watch top players and friends once online play launches.</small></div>
             </section>
           )}

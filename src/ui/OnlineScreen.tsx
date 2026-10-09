@@ -92,9 +92,9 @@ function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: {
 
   return (
     <div className="lobby" data-testid="lobby">
-      <header className="lobby-bar">
-        <button className="icon-btn" onClick={() => { if (view.lobby.kind === 'queued') client.cancelQueue(); if (view.lobby.kind === 'waiting') client.leave(); onHome(); }} aria-label="Home"><Icon name="house" size={20} /></button>
-        <h1>Online</h1>
+      <header className="page-head with-back">
+        <button className="icon-btn" onClick={() => { if (view.lobby.kind === 'queued') client.cancelQueue(); if (view.lobby.kind === 'waiting') client.leave(); onHome(); }} aria-label="Home"><Icon name="chevron-left" size={20} /></button>
+        <h1 className="page-title">{view.lobby.kind === 'queued' ? 'Matchmaking' : 'Online'}</h1>
         <span className={`conn conn-${bootError ? 'offline' : view.status}`} data-testid="conn-status"><i />{statusText}</span>
       </header>
 
@@ -105,14 +105,14 @@ function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: {
         </div>
       )}
 
-      <section className="lobby-card account" data-testid="account">
+      {view.lobby.kind !== 'queued' && <section className="account" data-testid="account">
         {user ? (
           <>
             <Avatar name={user.name} avatar={user.avatar} size={48} />
             <div className="account-info">
-              <div className="account-name" data-testid="account-name">{user.name}{user.guest && <span className="guest-tag">GUEST</span>}</div>
+              <div className="account-name" data-testid="account-name">{user.name}{user.guest && <span className="guest-tag">Guest</span>}</div>
               <div className="account-sub">
-                {user.guest ? 'Playing as a guest — sign up to keep a rating' : <>Rating <b>{user.rating}</b> · {user.wins}W {user.losses}L {user.draws}D</>}
+                {user.guest ? 'Playing as a guest. Sign up to keep a rating.' : <>Rating <b>{user.rating}</b> · {user.wins}W {user.losses}L {user.draws}D</>}
               </div>
             </div>
             <div className="account-actions">
@@ -129,27 +129,26 @@ function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: {
         ) : (
           <div className="account-sub">Getting you a guest name…</div>
         )}
-      </section>
+      </section>}
 
       {view.lobby.kind === 'waiting' ? (
         <WaitingRoom code={view.lobby.code} invitee={view.lobby.invitee} since={view.lobby.since} />
+      ) : view.lobby.kind === 'queued' ? (
+        <Matchmaking since={view.lobby.since} rated={view.lobby.rated} user={user} />
       ) : (
         <div className="lobby-grid">
-          <section className="lobby-card">
-            <h2>Quick Match</h2>
-            <p>{user && !user.guest ? 'Rated · paired with a player near your rating' : 'Casual · guests are paired with other guests'}</p>
+          <section className="lobby-card ink qm-card">
+            <span className="eyebrow">{user && !user.guest ? 'Rated' : 'Casual'}</span>
+            <h2>Quick match</h2>
+            <p>{user && !user.guest ? 'Paired with a player near your rating. 10 minutes each.' : 'Guests are paired with other guests. 10 minutes each.'}</p>
             <RankedNote />
-            {view.lobby.kind === 'queued' ? (
-              <QueueStatus since={view.lobby.since} rated={view.lobby.rated} />
-            ) : (
-              <button className="btn primary wide" disabled={!ready} onClick={() => client.quickMatch()} data-testid="quick-match">Find opponent</button>
-            )}
+            <button className="btn primary wide" disabled={!ready} onClick={() => client.quickMatch()} data-testid="quick-match">Find opponent <Icon name="arrow-right" size={18} /></button>
           </section>
 
           <section className="lobby-card">
             <h2>Play a friend</h2>
-            <p>Unrated private room — share a link or a 6-letter code.</p>
-            <button className="btn primary wide" disabled={!ready || view.lobby.kind === 'queued'} onClick={() => client.createRoom()} data-testid="create-invite">Create invite link</button>
+            <p>Unrated private room. Share a link or a 6-letter code.</p>
+            <button className="btn wide" disabled={!ready} onClick={() => client.createRoom()} data-testid="create-invite">Create invite link</button>
             <form
               className="code-form"
               onSubmit={(e) => { e.preventDefault(); const c = normalizeCode(code); if (c) client.joinRoom(c); }}
@@ -171,19 +170,33 @@ function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: {
   );
 }
 
-function QueueStatus({ since, rated }: { since: number; rated: boolean }) {
+/** Mirrors the server's defaults (MATCH_WINDOW 100, widening 25 per second) to show the search range. */
+const MATCH_WINDOW = 100;
+const MATCH_WIDEN_PER_SEC = 25;
+
+function Matchmaking({ since, rated, user }: { since: number; rated: boolean; user: PublicUser | null }) {
   const [now, setNow] = useState(Date.now());
-  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(id); }, []);
-  const s = Math.floor((now - since) / 1000);
+  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 250); return () => clearInterval(id); }, []);
+  const s = Math.max(0, Math.floor((now - since) / 1000));
+  const w = Math.round(MATCH_WINDOW + MATCH_WIDEN_PER_SEC * s);
+  const r = user?.rating ?? 1200;
   return (
-    <div className="queue" data-testid="queued">
-      <div className="spinner" />
-      <div>
-        <b>Searching{rated ? ' (rated)' : ''}…</b>
-        <small>{Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}</small>
+    <section className="matchmaking" data-testid="queued">
+      <div className="mm-timer num" aria-label="Time searching">{Math.floor(s / 60)}:{String(s % 60).padStart(2, '0')}</div>
+      <div className="mm-strip">
+        <div><span className="eyebrow">Mode</span><b>{rated ? 'Rated' : 'Casual'}</b></div>
+        <div><span className="eyebrow">Clock</span><b>10 min</b></div>
+        <div><span className="eyebrow">{rated ? 'Rating range' : 'Pool'}</span><b className="num">{rated ? `${Math.max(0, r - w)}–${r + w}` : 'Guests'}</b></div>
       </div>
-      <button className="btn ghost small" onClick={() => client.cancelQueue()}>Cancel</button>
-    </div>
+      {rated && (
+        <div className="mm-range" aria-hidden="true">
+          <i style={{ left: `${Math.max(0, 50 - (w / 800) * 50)}%`, right: `${Math.max(0, 50 - (w / 800) * 50)}%` }} />
+          <b style={{ left: '50%' }} />
+        </div>
+      )}
+      <p className="mm-note">{rated ? 'The range widens the longer you wait.' : 'Searching for another guest.'} You’ll go straight to the board when someone is found.</p>
+      <button className="btn wide" onClick={() => client.cancelQueue()}>Cancel search</button>
+    </section>
   );
 }
 
@@ -196,10 +209,9 @@ function WaitingRoom({ code, invitee, since }: { code: string; invitee?: FriendI
       <section className="lobby-card waiting challenge-wait" data-testid="challenge-wait">
         <Avatar name={invitee.name} avatar={invitee.avatar} size={72} />
         <h2>Challenge sent</h2>
-        <p>Waiting for <b>{invitee.name}</b> ({invitee.rating}) to accept… The game starts the moment they do.</p>
+        <p>Waiting for <b>{invitee.name}</b> ({invitee.rating}) to accept. The game starts the moment they do.</p>
         <div className="cw-timer" data-testid="challenge-wait-timer">{countdown((since ?? now) + CHALLENGE_TTL_MS - now)}</div>
         <small className="cw-note">The invite expires in {CHALLENGE_TTL_MS / 60_000} minutes.</small>
-        <div className="spinner big" />
         <button className="btn ghost" onClick={() => client.leave()} data-testid="challenge-cancel">Cancel challenge</button>
       </section>
     );
@@ -212,18 +224,17 @@ function WaitingRoom({ code, invitee, since }: { code: string; invitee?: FriendI
   };
   return (
     <section className="lobby-card waiting" data-testid="waiting-room">
-      <h2>Waiting for your friend…</h2>
-      <p>Send them this link or code. The game starts as soon as they join.</p>
-      <div className="invite-code" data-testid="invite-code">{code}</div>
+      <span className="eyebrow">Invite code</span>
+            <div className="invite-code" data-testid="invite-code">{code}</div>
+      <h2>Waiting for your friend</h2>
       <div className="invite-link" data-testid="invite-link">{link}</div>
       <div className="panel-actions">
-        <button className="btn primary" onClick={copy}>{copied ? 'Copied!' : 'Copy link'}</button>
+        <button className="btn" onClick={copy}><Icon name={copied ? 'check' : 'link'} size={16} /> {copied ? 'Copied' : 'Copy link'}</button>
         {'share' in navigator && (
           <button className="btn" onClick={() => navigator.share({ title: 'Chess UNO', text: `Play Chess UNO with me — code ${code}`, url: link }).catch(() => {})}>Share</button>
         )}
         <button className="btn ghost" onClick={() => client.leave()}>Cancel</button>
       </div>
-      <div className="spinner big" />
     </section>
   );
 }
@@ -233,8 +244,8 @@ function MyGames({ me, onReplay }: { me: PublicUser; onReplay: OpenReplay }) {
   useEffect(() => { client.myGames().then(setRows).catch(() => setRows([])); }, [me.id, me.wins, me.losses, me.draws]);
   if (!rows?.length) return null;
   return (
-    <section className="lobby-card recent" data-testid="my-online-games">
-      <h2>Your recent games</h2>
+    <section className="recent" data-testid="my-online-games">
+      <div className="recent-head"><h3>Your recent games</h3></div>
       {rows.slice(0, 6).map((g) => {
         const o = outcome({ result: { winner: g.winner, reason: g.reason } as never, you: g.seat });
         return (
@@ -257,22 +268,22 @@ function LobbyLinks({ view, onSocial, onLeaderboard }: { view: OnlineView; onSoc
   const on = friends.filter((f) => f.presence && f.presence.status !== 'offline').length;
   const req = view.friends?.incoming.length ?? 0;
   return (
-    <section className="lobby-card lobby-links" data-testid="lobby-links">
-      <button className="lobby-link" onClick={() => onSocial('friends')} data-testid="lobby-to-friends">
-        <span className="ll-icon"><Icon name="users" size={22} /></span>
-        <span className="ll-text"><b>Friends {req > 0 && <span className="count-pill">{req} new</span>}</b>
+    <section className="rows lobby-links" data-testid="lobby-links">
+      <button className="row lobby-link" onClick={() => onSocial('friends')} data-testid="lobby-to-friends">
+        <span className="row-icon"><Icon name="users" size={22} /></span>
+        <span className="row-main"><b>Friends {req > 0 && <span className="row-new">{req} new</span>}</b>
           <small>{!account ? 'Sign up to add friends and challenge them' : friends.length ? `${on} of ${friends.length} online · challenge or watch` : 'Find players by name'}</small></span>
-        <span className="chev"><Icon name="chevron-right" size={20} /></span>
+        <Icon name="chevron-right" size={18} className="chev" />
       </button>
-      <button className="lobby-link" onClick={() => onSocial('live')} data-testid="lobby-to-live">
-        <span className="ll-icon"><Icon name="radio" size={22} /></span>
-        <span className="ll-text"><b>Live games</b><small>Watch games in progress — top-rated first</small></span>
-        <span className="chev"><Icon name="chevron-right" size={20} /></span>
+      <button className="row lobby-link" onClick={() => onSocial('live')} data-testid="lobby-to-live">
+        <span className="row-icon"><Icon name="radio" size={22} /></span>
+        <span className="row-main"><b>Live games</b><small>Games in progress, top rated first</small></span>
+        <Icon name="chevron-right" size={18} className="chev" />
       </button>
-      <button className="lobby-link" onClick={onLeaderboard} data-testid="lobby-to-leaderboard">
-        <span className="ll-icon"><Icon name="trophy" size={22} /></span>
-        <span className="ll-text"><b>Leaderboard</b><small>{account ? `You: ${user!.rating}` : 'Top rated players'}</small></span>
-        <span className="chev"><Icon name="chevron-right" size={20} /></span>
+      <button className="row lobby-link" onClick={onLeaderboard} data-testid="lobby-to-leaderboard">
+        <span className="row-icon"><Icon name="trophy" size={22} /></span>
+        <span className="row-main"><b>Leaderboard</b><small>{account ? `You: ${user!.rating}` : 'Top rated players'}</small></span>
+        <Icon name="chevron-right" size={18} className="chev" />
       </button>
     </section>
   );
@@ -285,7 +296,7 @@ function RankedNote() {
   const done = order.filter((id) => p.lessons[id]).length;
   return (
     <p className={`ranked-note ${p.rankedUnlocked ? 'on' : ''}`} data-testid="ranked-note">
-      <Icon name={p.rankedUnlocked ? 'graduation-cap' : 'book'} size={16} /> {p.rankedUnlocked ? 'Ranked unlocked — learning path complete' : `Learning path ${done}/${order.length} — finish it to unlock ranked`}
+      <Icon name={p.rankedUnlocked ? 'graduation-cap' : 'book'} size={16} /> {p.rankedUnlocked ? 'Ranked unlocked: learning path complete.' : `Learning path ${done}/${order.length}. Finish it to unlock ranked.`}
     </p>
   );
 }

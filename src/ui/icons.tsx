@@ -9,9 +9,9 @@ import {
   Castle, Cat, Check, ChessBishop, ChessKing, ChessKnight, ChessPawn, ChessQueen, ChessRook, ChevronDown, ChevronLeft,
   ChevronRight, ChevronUp, CloudCheck, CodeXml, Crown, Ellipsis, ExternalLink, Eye, FastForward, Flag, Flame, Footprints, Frown,
   Gem, Gift, Globe, GraduationCap, Hand, Handshake, Hourglass, House, KeyRound, Laugh, Layers, Lightbulb, Link, Lock, Medal,
-  Menu, MessageCircle, Moon, PartyPopper, Pause, Pencil, Play, Radio, Recycle, Rewind, Rocket, RotateCcw, RotateCw, Scale, Scissors,
-  ScrollText, Search, Settings, Shield, SkipBack, SkipForward, Smartphone, Snowflake, Spade, Sparkles, Star, StepBack,
-  StepForward, Swords, Target, ThumbsUp, Timer, Trash2, TrendingDown, TrendingUp, Trophy, Undo2, User, Users, Waves, WifiOff,
+  Menu, MessageCircle, Monitor, Moon, PartyPopper, Pause, Pencil, Play, Radio, Recycle, Rewind, Rocket, RotateCcw, RotateCw, Scale, Scissors,
+  ScanSearch, ScrollText, Search, Settings, Shield, SkipBack, SkipForward, Smartphone, Snowflake, Spade, Sparkles, Star, StepBack,
+  StepForward, Sun, Swords, Target, ThumbsUp, Timer, Trash2, TrendingDown, TrendingUp, Trophy, Undo2, User, Users, Waves, WifiOff,
   X, Zap, type LucideIcon,
 } from 'lucide-react';
 
@@ -23,9 +23,9 @@ export const ICONS = {
   'cloud-check': CloudCheck, code: CodeXml, crown: Crown, more: Ellipsis, external: ExternalLink, eye: Eye, 'fast-forward': FastForward,
   flag: Flag, flame: Flame, footprints: Footprints, frown: Frown, gem: Gem, gift: Gift, globe: Globe, 'graduation-cap': GraduationCap,
   hand: Hand, handshake: Handshake, hourglass: Hourglass, house: House, key: KeyRound, laugh: Laugh, layers: Layers, lightbulb: Lightbulb,
-  link: Link, lock: Lock, medal: Medal, menu: Menu, chat: MessageCircle, moon: Moon, party: PartyPopper, pause: Pause, pencil: Pencil,
+  link: Link, lock: Lock, medal: Medal, menu: Menu, monitor: Monitor, sun: Sun, chat: MessageCircle, moon: Moon, party: PartyPopper, pause: Pause, pencil: Pencil,
   play: Play, radio: Radio, recycle: Recycle, rewind: Rewind, rocket: Rocket, 'rotate-ccw': RotateCcw, 'rotate-cw': RotateCw, scale: Scale,
-  scissors: Scissors, scroll: ScrollText, search: Search, settings: Settings, shield: Shield, 'skip-back': SkipBack,
+  review: ScanSearch, scissors: Scissors, scroll: ScrollText, search: Search, settings: Settings, shield: Shield, 'skip-back': SkipBack,
   'skip-forward': SkipForward, smartphone: Smartphone, snowflake: Snowflake, spade: Spade, sparkles: Sparkles, star: Star,
   'step-back': StepBack, 'step-forward': StepForward, swords: Swords, target: Target, 'thumbs-up': ThumbsUp, timer: Timer,
   trash: Trash2, 'trend-down': TrendingDown, 'trend-up': TrendingUp, trophy: Trophy, undo: Undo2, user: User, users: Users,
@@ -39,7 +39,7 @@ export const isIconName = (v: unknown): v is IconName => typeof v === 'string' &
  * One Lucide icon at a consistent stroke. Decorative by default (aria-hidden); pass `label`
  * when the icon carries meaning on its own (no visible text next to it).
  */
-export function Icon({ name, size = 18, label, className = '', strokeWidth = 2, style }: {
+export function Icon({ name, size = 18, label, className = '', strokeWidth = 2.25, style }: {
   name: IconName; size?: number | string; label?: string; className?: string; strokeWidth?: number; style?: CSSProperties;
 }) {
   const C = ICONS[name] ?? Sparkles;

@@ -87,6 +87,7 @@ export function App() {
   const reduced = useReducedMotion();
   const [replay, setReplay] = useState<ReplayView | null>(() => (urlReplay ? { src: { gameId: urlReplay }, back: 'home' } : null));
   const [learn, setLearn] = useState<LearnTab | null>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).has('learn') ? 'path' : null));
+  const [learnLesson, setLearnLesson] = useState<string | undefined>(undefined);
   const progress = useProgress();
   setActiveSkins(progress.skins);
   useEffect(clearUrlIntent, []);
@@ -153,11 +154,12 @@ export function App() {
         <Suspense fallback={<div className="learn-loading">Opening the path…</div>}>
           <LearnScreen
             initialTab={learn}
+            startLesson={learnLesson}
             pieceSet={pieceSet}
             boardMode={boardMode}
             onToggleBoard={toggleBoard}
             onBoardUnavailable={() => setBoardMode('2d')}
-            onHome={() => setLearn(null)}
+            onHome={() => { setLearn(null); setLearnLesson(undefined); }}
             onPlaying={setLearnPlaying}
           />
         </Suspense>
@@ -173,7 +175,7 @@ export function App() {
           onSound={setSound}
           onHome={() => setSettingsTab(null)}
           onReplay={(src, tab) => { setSettingsTab(null); setReplay({ src, tab, back: 'home' }); }}
-          onLearn={() => { setSettingsTab(null); setLearn('path'); }}
+          onLearn={(lesson) => { setSettingsTab(null); setLearnLesson(lesson); setLearn('path'); }}
         />
       ) : page?.v === 'social' ? (
         <SocialScreen key={page.key} initialTab={page.tab} onChallenge={() => goOnline()} onWatch={(code) => goOnline({ kind: 'watch', code })} />

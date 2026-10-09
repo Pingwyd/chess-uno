@@ -36,7 +36,7 @@ export function LiveGames({ onWatch }: { onWatch: (code: string) => void }) {
         ))}
       </div>
       {games === null ? <p>{view.status === 'online' ? 'Loading…' : 'Connecting…'}</p> : !shown.length ? (
-        <p className="live-empty">{games.length ? 'No games match this filter.' : 'No games right now — start a Quick Match and you’ll be the first on the board.'}</p>
+        <p className="live-empty">{games.length ? 'No games match this filter.' : 'No games right now. Start a quick match and yours will be the first.'}</p>
       ) : (
         <div className="live-list">
           {shown.map((g) => <LiveRow key={g.code} g={g} now={now} onWatch={onWatch} />)}
@@ -54,9 +54,8 @@ function LiveRow({ g, now, onWatch }: { g: LiveGame; now: number; onWatch: (code
       <span className="lr-main">
         <b><span>{a.name}</span> <small>{a.rating}</small> <em>vs</em> <span>{b.name}</span> <small>{b.rating}</small></b>
         <small>
-          {g.rated ? <span className="rated-tag">RATED</span> : <span className="casual-tag">CASUAL</span>}
-          {g.friend && <span className="friend-tag"><Icon name="star" size={11} /> FRIEND</span>}
-          {' '}Turn {g.turn} · {ago(g.startedAt, now)}{g.rated ? ' · 1-turn delay' : ''}
+          {g.rated ? 'Rated' : 'Casual'}{g.friend && <span className="friend-tag"> · <Icon name="star" size={11} /> Friend</span>}
+          {' · '}Turn {g.turn} · {ago(g.startedAt, now)}{g.rated ? ' · 1-turn delay' : ''}
         </small>
       </span>
       <span className="lr-watch"><span className="lr-eye" aria-label={`${g.spectators} watching`}><Icon name="eye" size={14} /> {g.spectators}</span><span className="lr-go">Watch <Icon name="chevron-right" size={14} /></span></span>

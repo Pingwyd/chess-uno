@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Lesson, Step } from '../../learn/types';
 import { BADGES, SKIN_NAMES, starsFor, type Outcome } from '../../learn/progress';
 import { DemoBoard } from './DemoBoard';
@@ -104,7 +104,7 @@ function Mcq({ step, env, onMistake, onDone }: { step: Extract<Step, { kind: 'mc
       </div>
       {picked !== null && (
         <div className={`feedback ${ok ? 'good' : 'bad'}`} data-testid={ok ? 'feedback-correct' : 'feedback-wrong'} role="status">
-          <div className="feedback-head"><span className="feedback-icon"><Icon name={ok ? 'check' : 'x'} size={18} strokeWidth={3} /></span><b>{ok ? 'Correct!' : `Answer: ${step.options[step.answer]}`}</b></div>
+          <div className="feedback-head"><span className="feedback-icon"><Icon name={ok ? 'check' : 'x'} size={18} strokeWidth={3} /></span><b>{ok ? 'Correct.' : `Answer: ${step.options[step.answer]}`}</b></div>
           <p><Rich text={step.explain} /></p>
           <div className="feedback-actions"><button className="btn primary wide" onClick={onDone} data-testid="continue">Continue</button></div>
         </div>
@@ -128,28 +128,30 @@ function Complete({ lesson, mode, stars, outcome, mistakes, hints, onExit, onNex
     return () => clearInterval(id);
   }, []);
   const badges = (outcome?.newBadges ?? []).map((id) => BADGES.find((b) => b.id === id)!).filter(Boolean);
-  const title = !outcome ? 'Almost there' : mode === 'placement' ? 'Tested out!' : mode === 'daily' ? 'Daily puzzle solved!' : 'Lesson complete!';
+  const slips = mistakes === 0 ? 'No mistakes' : `${mistakes} mistake${mistakes === 1 ? '' : 's'}`;
+  const eyebrow = mode === 'daily' ? 'Daily puzzle' : mode === 'placement' ? 'Placement check' : lesson.title;
+  const title = !outcome ? `${slips}. Not passed.` : mode === 'placement' ? 'Unit tested out.' : mode === 'daily' ? 'Solved.' : `Lesson complete. ${slips}.`;
   return (
     <div className="complete" data-testid="lesson-complete">
-      {outcome && <Confetti />}
-      <div className="complete-crest"><Icon name={outcome ? (mode === 'daily' ? 'calendar' : asIcon(lesson.icon)) : 'rotate-ccw'} size="1em" strokeWidth={1.7} /></div>
+      <div className="complete-crest"><Icon name={outcome ? (mode === 'daily' ? 'calendar' : asIcon(lesson.icon)) : 'rotate-ccw'} size="1em" strokeWidth={2} /></div>
+      <span className="eyebrow">{eyebrow}</span>
       <h2>{title}</h2>
       {!outcome ? (
-        <p className="complete-sub">{mistakes} mistakes — the placement check needs at most 1. Start with the first lesson, or try again later.</p>
+        <p className="complete-sub">The placement check allows at most 1 mistake. Start with the first lesson, or try again later.</p>
       ) : (
         <>
           {mode === 'lesson' && <Stars n={stars} size="lg" animate />}
           <div className="complete-stats">
-            <div className="stat-pill xp"><span><Icon name="zap" size={20} /></span><b data-testid="xp-gained">+{xp}</b><small>XP</small></div>
-            <div className="stat-pill streak"><span><Icon name="flame" size={20} /></span><b>{outcome.streak}</b><small>day streak</small></div>
-            {mode === 'lesson' && <div className="stat-pill acc"><span><Icon name="target" size={20} /></span><b>{mistakes === 0 ? '100%' : `${mistakes} slip${mistakes > 1 ? 's' : ''}`}</b><small>{hints ? `${hints} hint${hints > 1 ? 's' : ''} used` : 'accuracy'}</small></div>}
+            <div className="stat-pill xp"><b data-testid="xp-gained">+{xp}</b><small>XP</small></div>
+            <div className="stat-pill streak"><b>{outcome.streak}</b><small>Day streak</small></div>
+            {mode === 'lesson' && <div className="stat-pill acc"><b>{mistakes}</b><small>{hints ? `Mistakes · ${hints} hint${hints > 1 ? 's' : ''}` : 'Mistakes'}</small></div>}
           </div>
           {badges.length > 0 && (
             <div className="new-badges">
               {badges.map((b) => (
                 <div key={b.id} className="new-badge" data-testid="new-badge">
                   <span className="badge-medal"><Icon name={asIcon(b.icon)} size="1em" /></span>
-                  <div><b>New badge: {b.name}</b><small>{b.reward ? `Unlocked the ${SKIN_NAMES[b.reward.skin]} piece skin!` : b.desc}</small></div>
+                  <div><b>New badge: {b.name}</b><small>{b.reward ? `Unlocks the ${SKIN_NAMES[b.reward.skin]} piece skin.` : b.desc}</small></div>
                 </div>
               ))}
             </div>
@@ -160,22 +162,6 @@ function Complete({ lesson, mode, stars, outcome, mistakes, hints, onExit, onNex
         {onNext && outcome && <button className="btn primary wide" onClick={onNext} data-testid="next-lesson">Next: {nextTitle}</button>}
         <button className={`btn ${onNext && outcome ? 'ghost' : 'primary'} wide`} onClick={onExit} data-testid="complete-continue">{outcome ? 'Back to path' : 'OK'}</button>
       </div>
-    </div>
-  );
-}
-
-const CONFETTI_COLORS = ['#ffb347', '#ffd98a', '#2fe6d6', '#8a5cff', '#ff5470', '#f6eedf'];
-function Confetti() {
-  const bits = useMemo(() => Array.from({ length: 36 }, (_, k) => ({
-    left: Math.random() * 100, delay: Math.random() * 0.6, dur: 1.6 + Math.random() * 1.2,
-    color: CONFETTI_COLORS[k % CONFETTI_COLORS.length], rot: Math.random() * 360, size: 6 + Math.random() * 6,
-  })), []);
-  if (prefersReducedMotion()) return null;
-  return (
-    <div className="confetti" aria-hidden="true">
-      {bits.map((b, k) => (
-        <span key={k} style={{ left: `${b.left}%`, animationDelay: `${b.delay}s`, animationDuration: `${b.dur}s`, background: b.color, width: b.size, height: b.size * 0.45, transform: `rotate(${b.rot}deg)` }} />
-      ))}
     </div>
   );
 }

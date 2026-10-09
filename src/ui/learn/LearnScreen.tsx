@@ -16,6 +16,8 @@ export type LearnTab = 'path' | 'daily' | 'badges';
 
 interface Props extends BoardEnv {
   initialTab?: LearnTab;
+  /** Open straight into this lesson (when it is unlocked), e.g. from a locked skin's "Go to lesson". */
+  startLesson?: string;
   onHome: () => void;
   /** A lesson or puzzle is open (the app hides its navigation). */
   onPlaying?: (playing: boolean) => void;
@@ -25,11 +27,14 @@ const UNIT_BADGE: Record<string, string> = { basics: 'board-ready', cards: 'card
 const SYNC_TEXT: Record<string, string> = { synced: 'Synced to your account', offline: 'Offline — saved on this device', local: 'Saved on this device (sign up to sync)' };
 const WIGGLE = [0, 56, 84, 56, 0, -56, -84, -56];
 
-export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ...env }: Props) {
+export default function LearnScreen({ initialTab = 'path', startLesson, onHome, onPlaying, ...env }: Props) {
   const progress = useProgress();
   const sync = useSyncState();
   const [tab, setTab] = useState<LearnTab>(initialTab);
-  const [playing, setPlaying] = useState<{ lesson: Lesson; mode: PlayMode } | null>(null);
+  const [playing, setPlaying] = useState<{ lesson: Lesson; mode: PlayMode } | null>(() => {
+    const l = startLesson ? lessonById(startLesson) : undefined;
+    return l && isUnlocked(getProgress(), PATH_SHAPE, l.id) ? { lesson: l, mode: 'lesson' } : null;
+  });
   useEffect(() => { void pullProgress(); }, []);
   useEffect(() => { onPlaying?.(!!playing); }, [playing, onPlaying]);
   useEffect(() => () => onPlaying?.(false), [onPlaying]);
@@ -71,14 +76,9 @@ export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ..
   return (
     <div className="learn" data-testid="learn">
       <div className="learn-top">
-        <button className="icon-btn" onClick={onHome} aria-label="Home" data-testid="learn-home"><Icon name="house" size={20} /></button>
+        <button className="icon-btn" onClick={onHome} aria-label="Home" data-testid="learn-home"><Icon name="chevron-left" size={20} /></button>
         <h1 className="learn-title">Learn</h1>
-        <div className="learn-chips">
-          <span className={`chip chip-streak ${st > 0 ? 'lit' : ''}`} title="Daily streak" data-testid="streak"><Icon name="flame" size={15} /> {st}</span>
-          <span className="chip chip-xp" title="Total XP" data-testid="xp"><Icon name="zap" size={15} /> {progress.xp}</span>
-          {progress.freezes > 0 && <span className="chip chip-freeze" title="Streak freeze ready: one missed day won't break your streak" aria-label="Streak freeze ready"><Icon name="snowflake" size={15} /></span>}
-          <span className={`chip chip-sync ${sync}`} title={SYNC_TEXT[sync]}><Icon name={sync === 'synced' ? 'cloud-check' : sync === 'offline' ? 'offline' : 'smartphone'} size={15} label={SYNC_TEXT[sync]} /></span>
-        </div>
+        <span className={`learn-sync ${sync}`} title={SYNC_TEXT[sync]}><Icon name={sync === 'synced' ? 'cloud-check' : sync === 'offline' ? 'offline' : 'smartphone'} size={16} label={SYNC_TEXT[sync]} /></span>
       </div>
       <div className="learn-tabs" role="tablist">
         {(['path', 'daily', 'badges'] as LearnTab[]).map((t) => (
@@ -89,6 +89,7 @@ export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ..
       </div>
 
       <div className="learn-scroll" key={tab}>
+        {tab === 'path' && <ProgressPanel streak={st} />}
         {tab === 'path' && <PathMap onStart={start} />}
         {tab === 'daily' && <DailyTab onStart={() => start({ id: `daily-${utc}`, title: 'Daily puzzle', icon: 'calendar', minutes: 1, steps: [{ kind: 'puzzle', puzzle: daily }] }, 'daily')} />}
         {tab === 'badges' && <BadgesTab pieceSet={env.pieceSet} />}
@@ -97,11 +98,32 @@ export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ..
       {tab === 'path' && next && (
         <div className="learn-cta">
           <button className="btn primary wide" onClick={() => start(lessonById(next)!)} data-testid="continue-learning">
-            {Object.keys(progress.lessons).length ? 'Continue' : 'Start'}: {lessonById(next)!.title}
+            {Object.keys(progress.lessons).length ? 'Continue' : 'Start'}: {lessonById(next)!.title} <Icon name="arrow-right" size={18} />
           </button>
         </div>
       )}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------- progress panel
+
+/** The black progress panel: lessons done, XP, streak (stats divided by rules). */
+function ProgressPanel({ streak: st }: { streak: number }) {
+  const progress = useProgress();
+  const ids = UNITS.flatMap((u) => u.lessons.map((l) => l.id));
+  const done = ids.filter((id) => isDone(progress, id)).length;
+  return (
+    <section className="ink learn-progress" data-testid="learn-progress">
+      <span className="eyebrow">Your path</span>
+      <div className="lp-big"><b>{done}</b><span>/ {ids.length} lessons</span></div>
+      <div className="lp-meter"><i style={{ width: `${(done / ids.length) * 100}%` }} /></div>
+      <div className="lp-strip">
+        <div data-testid="xp"><b>{progress.xp}</b><small>XP</small></div>
+        <div data-testid="streak"><b>{st}</b><small>Day streak</small></div>
+        <div><b>{progress.freezes}</b><small>Freezes</small></div>
+      </div>
+    </section>
   );
 }
 
@@ -114,11 +136,11 @@ function PathMap({ onStart }: { onStart: (l: Lesson, mode?: PlayMode) => void })
   const [nudge, setNudge] = useState<string | null>(null);
   useEffect(() => {
     const el = ref.current?.querySelector('.node.current');
-    el?.scrollIntoView({ block: 'center' });
+    el?.scrollIntoView({ block: 'nearest' });
   }, []);
   return (
     <div className="path" ref={ref} data-testid="path-map">
-      {progress.rankedUnlocked && <div className="ranked-banner"><Icon name="graduation-cap" size={18} /> Path complete — ranked play unlocked!</div>}
+      {progress.rankedUnlocked && <div className="ranked-banner"><Icon name="graduation-cap" size={18} /> Path complete. Ranked play unlocked.</div>}
       {UNITS.map((u) => (
         <UnitSection key={u.id} unit={u} current={current} nudge={nudge} onNudge={(id) => { setNudge(id); setTimeout(() => setNudge(null), 1500); }} onStart={onStart} />
       ))}
@@ -150,7 +172,8 @@ function UnitSection({ unit, current, nudge, onNudge, onStart }: {
   return (
     <section className={`unit ${complete ? 'unit-done' : ''} ${firstOpen ? '' : 'unit-locked'}`} style={{ ['--unit' as string]: unit.color }} data-testid={`unit-${unit.id}`}>
       <header className="unit-head">
-        <div className="unit-index">Unit {unit.index}</div>
+        <div className="unit-num" aria-hidden="true">{String(unit.index).padStart(2, '0')}</div>
+        <div className="unit-index">Unit {unit.index}{complete ? ' · Complete' : ''}</div>
         <h2>{unit.title}</h2>
         <p>{unit.blurb}</p>
         <div className="unit-meter"><div style={{ width: `${(done / ids.length) * 100}%` }} /></div>
@@ -172,14 +195,14 @@ function UnitSection({ unit, current, nudge, onNudge, onStart }: {
           const state = rec ? 'done' : l.id === current ? 'current' : open ? 'open' : 'locked';
           return (
             <div key={l.id} className={`node-wrap ${pts[k].x > W / 2 ? 'side-l' : 'side-r'}`} style={{ left: pts[k].x, top: pts[k].y }}>
-              {state === 'current' && <div className="node-bubble">START</div>}
+              {state === 'current' && <div className="node-bubble">Start</div>}
               <button
                 className={`node ${state} ${nudge === l.id ? 'shake' : ''}`}
                 onClick={() => (state === 'locked' ? onNudge(l.id) : onStart(l))}
                 aria-label={`${l.title}${rec ? `, ${rec.stars} stars` : state === 'locked' ? ', locked' : ''}`}
                 data-testid={`node-${l.id}`}
               >
-                <span className="node-icon"><Icon name={state === 'locked' ? 'lock' : asIcon(l.icon)} size="1em" /></span>
+                <span className="node-icon"><Icon name={state === 'locked' ? 'lock' : state === 'done' ? 'check' : asIcon(l.icon)} size="1em" /></span>
               </button>
               {rec && <Stars n={rec.stars} size="sm" />}
               <div className="node-label">{l.title}<small>{l.minutes} min</small></div>
@@ -215,7 +238,7 @@ function DailyTab({ onStart }: { onStart: () => void }) {
         <p>{p.prompt}</p>
         <CardRow cards={[...(p.hand ?? []), ...p.cards]} />
         {solved ? (
-          <div className="daily-done" data-testid="daily-solved"><Icon name="check" size={16} /> Solved today — come back tomorrow for a new one</div>
+          <div className="daily-done" data-testid="daily-solved"><Icon name="check" size={16} /> Solved today. A new one arrives tomorrow.</div>
         ) : (
           <button className="btn primary wide" onClick={onStart} data-testid="daily-start">Solve · +20 XP</button>
         )}
@@ -235,7 +258,7 @@ function DailyTab({ onStart }: { onStart: () => void }) {
             );
           })}
         </div>
-        <p className="week-note">{progress.freezes > 0 ? <><Icon name="snowflake" size={14} /> Streak freeze ready — miss one day and your streak survives.</> : 'Streak freeze used. A 7-day streak earns a new one.'}</p>
+        <p className="week-note">{progress.freezes > 0 ? <><Icon name="snowflake" size={14} /> Streak freeze ready: miss one day and the streak survives.</> : 'Streak freeze used. A 7-day streak earns a new one.'}</p>
       </div>
     </div>
   );

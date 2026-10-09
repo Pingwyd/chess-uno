@@ -1,10 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import '@fontsource/cinzel/700.css';
-import '@fontsource/cinzel/900.css';
-import '@fontsource/nunito/400.css';
-import '@fontsource/nunito/700.css';
-import '@fontsource/nunito/800.css';
+// Self-hosted (OFL) so the app looks right offline: Anton for display, Inter for everything else.
+import '@fontsource/anton/latin-400.css';
+import '@fontsource-variable/inter/wght.css';
 import './ui/styles.css';
 import { App } from './ui/App';
 

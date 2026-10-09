@@ -4,7 +4,7 @@ import { has3D, type BoardMode } from '../BoardView';
 import type { PieceSet } from '../pieces';
 import { previewSfx } from '../sound';
 import { client, useOnline } from '../social/useOnline';
-import { setSettings, useSettings, type MotionPref, type Settings } from './store';
+import { setSettings, useSettings, type MotionPref, type Settings, type ThemePref } from './store';
 import { RULES_VERSION } from '../../rules/cards';
 import { Icon } from '../icons';
 
@@ -53,6 +53,20 @@ export function PrefsTab(p: PrefsProps) {
   const s = useSettings();
   return (
     <div className="prefs" data-testid="prefs">
+      <section className="set-card" data-testid="set-appearance">
+        <h3>Appearance</h3>
+        <div className="set-row">
+          <span className="set-label"><b>Theme</b><small>{s.theme === 'system' ? 'Follows this device' : s.theme === 'dark' ? 'Ink: near-black' : 'Paper: light'}</small></span>
+          <div className="seg seg-small mini-seg" role="radiogroup" aria-label="Theme">
+            {(['system', 'light', 'dark'] as ThemePref[]).map((t) => (
+              <button key={t} role="radio" aria-checked={s.theme === t} className={`seg-btn ${s.theme === t ? 'on' : ''}`} onClick={() => setSettings({ theme: t })} data-testid={`set-theme-${t}`}>
+                <Icon name={t === 'system' ? 'monitor' : t === 'light' ? 'sun' : 'moon'} size={15} /> {t === 'system' ? 'Auto' : t === 'light' ? 'Light' : 'Dark'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="set-card" data-testid="set-board">
         <h3>Board</h3>
         <div className="set-row">
@@ -78,7 +92,7 @@ export function PrefsTab(p: PrefsProps) {
           </div>
         </div>
         <Toggle label="Legal-move hints" sub="Dots and rings where the selected piece can go" on={s.hints} onChange={(v) => setSettings({ hints: v })} testid="set-hints" />
-        <Toggle label="Confirm moves" sub="Tap a move, then press Play — no mis-taps" on={s.confirmMoves} onChange={(v) => setSettings({ confirmMoves: v })} testid="set-confirm" />
+        <Toggle label="Confirm moves" sub="Tap a move, then press Play. Avoids mis-taps." on={s.confirmMoves} onChange={(v) => setSettings({ confirmMoves: v })} testid="set-confirm" />
       </section>
 
       <section className="set-card" data-testid="set-sound">
@@ -90,7 +104,7 @@ export function PrefsTab(p: PrefsProps) {
       </section>
 
       <section className="set-card" data-testid="set-notify">
-        <h3>Notifications <span className="soon-tag">PREVIEW</span></h3>
+        <h3>Notifications <small>Preview</small></h3>
         <p className="prof-note">Push notifications arrive with the mobile app. Your choices are saved now and will apply then.</p>
         {(Object.keys(notifyLabels) as (keyof Settings['notify'])[]).map((k) => (
           <Toggle key={k} label={notifyLabels[k][0]} sub={notifyLabels[k][1]} on={s.notify[k]} onChange={(v) => setSettings({ notify: { ...s.notify, [k]: v } })} testid={`set-notify-${k}`} />
@@ -100,7 +114,7 @@ export function PrefsTab(p: PrefsProps) {
       <section className="set-card" data-testid="set-motion">
         <h3>Accessibility</h3>
         <div className="set-row">
-          <span className="set-label"><b>Reduced motion</b><small>Calmer animations: no board spins, card flips or drifting sparks</small></span>
+          <span className="set-label"><b>Reduced motion</b><small>Calmer animations: no board spins or card flips</small></span>
           <div className="seg seg-small mini-seg">
             {(['system', 'on', 'off'] as MotionPref[]).map((m) => (
               <button key={m} className={`seg-btn ${s.reducedMotion === m ? 'on' : ''}`} onClick={() => setSettings({ reducedMotion: m })} data-testid={`set-motion-${m}`}>{m === 'system' ? 'Auto' : m === 'on' ? 'On' : 'Off'}</button>
