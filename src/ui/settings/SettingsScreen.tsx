@@ -3,12 +3,10 @@ import { HAS_SERVER, storedToken } from '../../net/online';
 import { AuthModal } from '../AuthModal';
 import { HowToPlay } from '../HowToPlay';
 import type { OpenReplay } from '../RecentGames';
-import { Avatar } from '../social/Avatar';
 import { client, useOnline } from '../social/useOnline';
 import { PrefsTab, type PrefsProps } from './PrefsTab';
 import { ProfileTab } from './ProfileTab';
 import { CollectionTab } from './CollectionTab';
-import { useSettings } from './store';
 import '../social/social.css';
 import { Icon } from '../icons';
 
@@ -29,7 +27,6 @@ export function SettingsScreen({ initialTab, onHome, onReplay, onLearn, ...prefs
   const [auth, setAuth] = useState<'login' | 'signup' | null>(null);
   const [howTo, setHowTo] = useState(false);
   const view = useOnline();
-  const settings = useSettings();
 
   useEffect(() => {
     // Signed in before? Load the account (and keep the socket up for presence). Never creates a guest here.
@@ -38,16 +35,16 @@ export function SettingsScreen({ initialTab, onHome, onReplay, onLearn, ...prefs
   }, []);
 
   const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
-    { id: 'profile', label: 'Profile', icon: <Avatar name={view.user?.name ?? 'You'} avatar={view.user?.avatar ?? settings.avatar} size={22} /> },
-    { id: 'collection', label: 'Collection', icon: <Icon name="award" size={17} /> },
-    { id: 'settings', label: 'Settings', icon: <Icon name="settings" size={17} /> },
+    { id: 'profile', label: 'Profile', icon: null },
+    { id: 'collection', label: 'Collection', icon: null },
+    { id: 'settings', label: 'Settings', icon: null },
   ];
 
   return (
     <div className="lobby settings-screen" data-testid="settings">
-      <header className="lobby-bar">
-        <button className="icon-btn" onClick={onHome} aria-label="Home" data-testid="settings-home"><Icon name="house" size={20} /></button>
-        <h1>{TITLES[tab]}</h1>
+      <header className="page-head with-back">
+        <button className="icon-btn" onClick={onHome} aria-label="Home" data-testid="settings-home"><Icon name="chevron-left" size={20} /></button>
+        <h1 className="page-title">{TITLES[tab]}</h1>
       </header>
       <nav className="set-tabs" role="tablist">
         {tabs.map((t) => (
@@ -66,7 +63,7 @@ export function SettingsScreen({ initialTab, onHome, onReplay, onLearn, ...prefs
         <div className="overlay" onClick={() => setHowTo(false)}>
           <div className="panel rules" onClick={(e) => e.stopPropagation()}>
             <HowToPlay />
-            <button className="btn primary" onClick={() => setHowTo(false)}>Got it</button>
+            <button className="btn wide" onClick={() => setHowTo(false)}>Got it</button>
           </div>
         </div>
       )}

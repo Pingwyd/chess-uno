@@ -75,7 +75,7 @@ export function RecentGames({ onOpen }: { onOpen: OpenReplay }) {
                 </div>
               ))}
             </div>
-            <button className="btn primary wide" onClick={() => setAll(false)}>Close</button>
+            <button className="btn wide" onClick={() => setAll(false)}>Close</button>
           </div>
         </div>
       )}

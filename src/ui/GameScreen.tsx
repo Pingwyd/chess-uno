@@ -46,7 +46,10 @@ interface Props {
 }
 
 interface Reveal { key: number; kind: CardKind; toHand: boolean; capped: boolean; flip: boolean; hidden: boolean; burned?: boolean }
-interface Banner { key: number; text: string; sub?: string; tone: 'skip' | 'reverse' | 'check' | 'info' }
+interface Banner { key: number; text: string; sub?: string; tone: 'skip' | 'reverse' | 'check' | 'info'; card?: CardKind }
+
+/** "You" takes the plural verb: "You sit…" vs "Ada sits…". */
+const says = (name: string, one: string, you: string) => `${name} ${name === 'You' ? you : one}`;
 
 export function GameScreen(props: Props) {
   const [gameKey, setGameKey] = useState(0);
@@ -116,28 +119,28 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
           // Rules v2: a Reverse drawn after the player's one Reverse is dead — discarded, draw again.
           if (e.from === 'deck') {
             newReveals.push({ key: key.current++, kind: e.card.kind, toHand: true, capped: false, flip: pass && e.player === top, hidden: false, burned: true });
-            newBanner = { key: key.current++, text: 'Reverse discarded', sub: `${state.players[e.player].name} already used their Reverse — drawing again`, tone: 'info' };
+            newBanner = { key: key.current++, text: 'Reverse discarded', sub: `${says(state.players[e.player].name, 'has', 'have')} used the one Reverse. Drawing again.`, tone: 'info' };
           }
           break;
         case 'playCard':
           if (e.card.kind === 'skip') {
-            newBanner = { key: key.current++, text: 'SKIP!', sub: `${state.players[e.player].name} will go again`, tone: 'skip' };
+            newBanner = { key: key.current++, text: 'Skip', sub: `${says(state.players[e.player].name, 'goes', 'go')} again.`, tone: 'skip', card: 'skip' };
             sfx.skip();
           }
           break;
         case 'reverse':
-          newBanner = { key: key.current++, text: 'REVERSE!', sub: 'Sides swapped — clocks & cards stay with you', tone: 'reverse' };
+          newBanner = { key: key.current++, text: 'Reverse', sub: 'Colours swap. Clocks and cards stay put.', tone: 'reverse', card: 'reverse' };
           sfx.reverse();
           buzz(120);
           break;
         case 'skipped':
-          newBanner = { key: key.current++, text: 'Turn skipped', sub: `${state.players[e.player].name} sits this one out`, tone: 'skip' };
+          newBanner = { key: key.current++, text: 'Turn skipped', sub: `${says(state.players[e.player].name, 'sits', 'sit')} this one out.`, tone: 'skip' };
           break;
         case 'skipCancelled':
-          newBanner = { key: key.current++, text: 'Skip cancelled', sub: 'Check cancels Skip', tone: 'info' };
+          newBanner = { key: key.current++, text: 'Skip cancelled', sub: 'Check cancels a Skip.', tone: 'info' };
           break;
         case 'turnEnd':
-          if (e.reason === 'check' && state.phase !== 'over') newBanner = { key: key.current++, text: 'CHECK!', sub: 'Check ends the turn', tone: 'check' };
+          if (e.reason === 'check' && state.phase !== 'over') newBanner = { key: key.current++, text: 'Check', sub: 'Check ends the turn.', tone: 'check' };
           break;
         case 'turnStart':
           if (pass) { buzz(35); sfx.turn(); }
@@ -200,8 +203,8 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
       promotion={promotion && state.current === player ? promotion : null}
       onPromote={(p) => { if (promotion) move(promotion.from, promotion.to, p); setPromotion(null); }}
       onCancelPromotion={() => setPromotion(null)}
-      onPause={!online && state.players[player].kind === 'human' ? () => dispatch({ type: 'pause' }) : undefined}
-      onResign={(online ? player === you : state.players[player].kind === 'human') ? () => dispatch({ type: 'resign', player }) : undefined}
+      onPause={pass ? () => dispatch({ type: 'pause' }) : undefined}
+      onResign={pass ? () => dispatch({ type: 'resign', player }) : undefined}
     />
   );
 
@@ -229,7 +232,7 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
           <button className="btn small primary" onClick={() => { commit(pending.from, pending.to, pending.promo); setPending(null); }} data-testid="confirm-ok"><Icon name="check" size={16} /> Play</button>
         </div>
       )}
-      {has3D() && (
+      {pass && has3D() && (
         <button className={`icon-btn board-mode-btn ${pass ? 'board-mode-pass' : ''}`} onClick={onToggleBoard} title={boardMode === '3d' ? 'Switch to 2D board' : 'Switch to 3D board'} data-testid="toggle-board">
           {boardMode === '3d' ? '2D' : '3D'}
         </button>
@@ -263,19 +266,12 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
             <div className="game-bar-title">
               {online
                 ? spectator
-                  ? <>Watching · <span className="mono">{online.snap.code}</span></>
-                  : <>vs {state.players[top].name}{online.snap.rated && <span className="rated-tag">RATED</span>}</>
-                : <>vs {BOT_NAMES[setup.botLevel]}</>}
+                  ? <>Watching <span className="mono">{online.snap.code}</span></>
+                  : <>Vs {state.players[top].name}{online.snap.rated && <span className="rated-tag">Rated</span>}</>
+                : <>Vs {BOT_NAMES[setup.botLevel]}</>}
             </div>
             {online && online.snap.spectators > 0 && <span className="spectators" title="Spectators" aria-label={`${online.snap.spectators} watching`}><Icon name="eye" size={16} /> {online.snap.spectators}</span>}
             {online && !spectator && <ShareWatch code={online.snap.code} />}
-            <button className="icon-btn" onClick={onTogglePieces} title="Toggle piece set" aria-label="Toggle piece set"><Icon name={pieceSet === 'arcane' ? 'knight' : 'sparkles'} size={20} /></button>
-            {!wide && (
-              <button className="icon-btn log-toggle" onClick={() => setShowLog((v) => !v)} aria-label={online ? 'Chat and turns' : 'Move list'} data-testid="side-toggle">
-                <Icon name={online ? 'chat' : 'menu'} size={20} />
-                {online && unread > 0 && !showLog && <span className="unread">{unread}</span>}
-              </button>
-            )}
           </header>
           {wide ? (
             <div className="bot-wide">
@@ -301,6 +297,21 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
           </div>
           )}
         </>
+      )}
+      {!pass && state.phase !== 'over' && (
+        <ActionPill
+          wide={wide}
+          logOpen={showLog}
+          online={!!online}
+          unread={unread}
+          onLog={() => setShowLog((v) => !v)}
+          boardMode={boardMode}
+          onToggleBoard={onToggleBoard}
+          pieceSet={pieceSet}
+          onTogglePieces={onTogglePieces}
+          onPause={!online && state.players[bottom].kind === 'human' ? () => dispatch({ type: 'pause' }) : undefined}
+          onResign={!spectator && (online ? true : state.players[bottom].kind === 'human') ? () => dispatch({ type: 'resign', player: bottom }) : undefined}
+        />
       )}
       {state.paused && state.phase !== 'over' && (
         <div className="overlay pause-overlay">
@@ -331,7 +342,13 @@ export function CardReveal({ reveal, pass }: { reveal: Reveal; pass: boolean }) 
   return (
     <div className={`reveal ${reveal.flip ? 'reveal-flip' : ''} ${reveal.toHand ? 'reveal-hand' : ''} ${reveal.burned ? 'reveal-burned' : ''} ${pass ? 'reveal-pass' : ''}`} key={reveal.key}>
       <div className="reveal-card">
-        {reveal.hidden ? <CardBack size="xl" /> : <CardFace kind={reveal.kind} size="xl" />}
+        {reveal.hidden ? <CardBack size="xl" /> : (
+          // The drawn card turns over: back first, then the face.
+          <div className="flipper">
+            <CardFace kind={reveal.kind} size="xl" className="flip-face" />
+            <CardBack size="xl" className="flip-face flip-back" />
+          </div>
+        )}
       </div>
       <div className="reveal-label">
         {reveal.burned ? 'Reverse already used — discarded, draw again' : reveal.hidden ? 'Action card — held in hand' : reveal.toHand ? 'Into your hand — draw again' : reveal.capped ? 'Opening turn: counts as 1' : `${reveal.kind} move${reveal.kind === '1' ? '' : 's'}`}
@@ -341,16 +358,57 @@ export function CardReveal({ reveal, pass }: { reveal: Reveal; pass: boolean }) 
 }
 
 function BannerView({ banner, pass }: { banner: Banner; pass: boolean }) {
+  // Key moments are physical: a Skip card slams onto the table, a Reverse card flips, Check is a stamp.
   const content = (
-    <div className={`banner banner-${banner.tone}`}>
-      <div className="banner-text">{banner.text}</div>
-      {banner.sub && <div className="banner-sub">{banner.sub}</div>}
+    <div className={`banner banner-${banner.tone} ${banner.card ? 'banner-has-card' : ''}`}>
+      {banner.card && <div className={`banner-card bc-${banner.card}`}><CardFace kind={banner.card} size="lg" /></div>}
+      <div className="banner-copy">
+        <div className="banner-text">{banner.text}</div>
+        {banner.sub && <div className="banner-sub">{banner.sub}</div>}
+      </div>
     </div>
   );
   return (
     <div className="banner-layer" key={banner.key}>
       {pass && <div className="banner-half rotated">{content}</div>}
       <div className="banner-half">{content}</div>
+    </div>
+  );
+}
+
+/** Floating pill: the in-game actions (turn list / chat, board mode, piece set, pause, resign). */
+function ActionPill(p: {
+  wide: boolean; logOpen: boolean; online: boolean; unread: number; onLog: () => void;
+  boardMode: BoardMode; onToggleBoard: () => void; pieceSet: PieceSet; onTogglePieces: () => void;
+  onPause?: () => void; onResign?: () => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  if (confirm && p.onResign) {
+    return (
+      <div className="action-pill confirming" role="toolbar" aria-label="Confirm resign">
+        <span className="ap-q">Resign this game?</span>
+        <button className="ap-btn ap-danger" onClick={() => { setConfirm(false); p.onResign!(); }}>Resign?</button>
+        <button className="ap-btn" onClick={() => setConfirm(false)}>No</button>
+      </div>
+    );
+  }
+  return (
+    <div className="action-pill" role="toolbar" aria-label="Game actions">
+      {!p.wide && (
+        <button className={`ap-btn log-toggle ${p.logOpen ? 'on' : ''}`} onClick={p.onLog} aria-label={p.online ? 'Chat and turns' : 'Move list'} data-testid="side-toggle">
+          <Icon name={p.online ? 'chat' : 'scroll'} size={19} />
+          <span className="ap-label">{p.online ? 'Chat' : 'Turns'}</span>
+          {p.online && p.unread > 0 && !p.logOpen && <span className="unread">{p.unread}</span>}
+        </button>
+      )}
+      {has3D() && (
+        <button className="ap-btn" onClick={p.onToggleBoard} title={p.boardMode === '3d' ? 'Switch to 2D board' : 'Switch to 3D board'} data-testid="toggle-board">
+          <span className="ap-text">{p.boardMode === '3d' ? '2D' : '3D'}</span>
+        </button>
+      )}
+      <button className="ap-btn" onClick={p.onTogglePieces} title="Toggle piece set" aria-label="Toggle piece set"><Icon name={p.pieceSet === 'arcane' ? 'knight' : 'crown'} size={19} /></button>
+      {p.onPause && <button className="ap-btn" onClick={p.onPause} aria-label="Pause"><Icon name="pause" size={19} /></button>}
+      {p.onResign && <button className="ap-btn" onClick={() => setConfirm(true)} aria-label="Resign"><Icon name="flag" size={19} /><span className="ap-label">Resign</span></button>}
     </div>
   );
 }
@@ -370,17 +428,6 @@ function PausePanel({ rotated, onResume, onHome }: { rotated: boolean; onResume:
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 
-const REASON: Record<GameResult['reason'], string> = {
-  checkmate: 'by checkmate',
-  timeout: 'on time',
-  resign: 'by resignation',
-  stalemate: 'Stalemate',
-  threefold: 'Threefold repetition',
-  'fifty-move': '50-move rule',
-  insufficient: 'Insufficient material',
-  agreement: 'By agreement',
-  'timeout-vs-insufficient': 'Time out vs. insufficient material',
-};
 
 /**
  * Saves every finished game to this device (recent games + replay). Local games are recorded by the
@@ -429,40 +476,64 @@ function useSaveFinishedGame(state: GameState, transport: GameTransport, setup: 
   return () => job.current ?? Promise.resolve(gameId ? { gameId } : null);
 }
 
+/** One factual line: what ended the game, and when. */
+function endLine(state: GameState, result: GameResult, note?: string): string {
+  const name = (p: PlayerId) => state.players[p].name;
+  const turnsOf = (p: PlayerId) => state.history.filter((t) => t.player === p && !t.skipped).length;
+  const total = state.history.filter((t) => !t.skipped).length;
+  if (result.winner === null) return `Draw by ${DRAW_REASON[result.reason] ?? 'agreement'} after ${plural(total, 'turn')}.`;
+  const w = result.winner;
+  const loser = (w === 0 ? 1 : 0) as PlayerId;
+  if (note === 'abandoned') return `${name(loser)} left the game on turn ${total}.`;
+  switch (result.reason) {
+    case 'checkmate': return `Mate in ${plural(turnsOf(w), 'turn')}.`;
+    case 'resign': return `${name(loser)} resigned on turn ${total}.`;
+    case 'timeout': return `${says(name(loser), 'runs', 'run')} out of time on turn ${total}.`;
+    default: return `${name(w)} won on turn ${total}.`;
+  }
+}
+
+const DRAW_REASON: Partial<Record<GameResult['reason'], string>> = {
+  stalemate: 'stalemate', threefold: 'threefold repetition', 'fifty-move': 'the 50-move rule', insufficient: 'insufficient material',
+  agreement: 'agreement', 'timeout-vs-insufficient': 'timeout vs. insufficient material',
+};
+
 function GameOver({ state, result, pass, onRematch, onHome, online, onReview }: { state: GameState; result: GameResult; pass: boolean; onRematch: () => void; onHome: () => void; online?: OnlineBinding; onReview?: () => void }) {
   const info = online?.snap.result;
   const panel = (viewer: PlayerId | null, rotated: boolean) => {
     const draw = result.winner === null;
     const won = !draw && viewer !== null && result.winner === viewer;
-    const title = draw ? 'Draw' : viewer === null ? `${state.players[result.winner!].name} wins` : won ? 'Victory!' : 'Defeat';
-    const how = info?.note === 'abandoned' ? 'by abandonment' : REASON[result.reason];
-    const sub = draw ? REASON[result.reason] : `${state.players[result.winner!].name} won ${how}`;
+    const verdict = draw ? 'Draw.' : viewer === null ? `${state.players[result.winner!].name} won.` : won ? 'You won.' : 'You lost.';
+    const line = endLine(state, result, info?.note);
     const delta = info?.ratingChange && viewer !== null ? info.ratingChange[viewer] : null;
     const turns = state.history.filter((t) => !t.skipped).length;
+    const passVerdict = pass && !draw ? `${state.players[result.winner!].name} won.` : verdict;
     return (
       <div className={`panel gameover ${rotated ? 'rotated' : ''} ${won ? 'won' : draw ? 'drawn' : 'lost'}`} data-testid="game-over">
-        <div className="gameover-crest"><Icon name={draw ? 'scale' : won || viewer === null ? 'trophy' : 'flag'} size="1em" strokeWidth={1.6} /></div>
-        <h2>{title}</h2>
-        <p>{sub}</p>
-        <div className="gameover-stats">
-          <span>{plural(turns, 'turn')}</span>
-          <span>{plural(state.history.reduce((n, t) => n + t.moves.length, 0), 'move')}</span>
-          <span>{plural(state.history.reduce((n, t) => n + t.played.length, 0), 'card')} played</span>
-        </div>
-        {delta !== null && info?.ratingAfter && viewer !== null && (
-          <div className={`rating-change ${delta >= 0 ? 'up' : 'down'}`} data-testid="rating-change">
-            Rating {info.ratingAfter[viewer]} <b><Icon name={delta >= 0 ? 'trend-up' : 'trend-down'} size={16} label={delta >= 0 ? 'up' : 'down'} /> {delta >= 0 ? `+${delta}` : delta}</b>
+        <div className="go-head">
+          <div>
+            <div className={`go-verdict ${pass ? '' : won ? 'win' : draw ? '' : viewer === null ? '' : 'loss'}`}>{pass ? passVerdict : verdict}</div>
+            <h2>{line}</h2>
           </div>
-        )}
-        {info && <div className="seed-note">Deck seed {info.seed} — the shuffle can be verified</div>}
-        {onReview && (
-          <button className="btn review-btn" onClick={onReview} data-testid="review-game">
-            <span className="review-btn-icon"><Icon name="sparkles" size={22} /></span>
-            <span><b>Review game</b><small>Replay every turn with the review bot</small></span>
-          </button>
-        )}
+          {delta !== null && info?.ratingAfter && viewer !== null && (
+            <div className={`rating-change ${delta >= 0 ? 'up' : 'down'}`} data-testid="rating-change">
+              <span className="rc-label">Rating</span>
+              <span className="rc-num">{info.ratingAfter[viewer]}</span>
+              <b><Icon name={delta >= 0 ? 'trend-up' : 'trend-down'} size={16} label={delta >= 0 ? 'up' : 'down'} /> {delta >= 0 ? `+${delta}` : delta}</b>
+            </div>
+          )}
+        </div>
+        <p className="gameover-stats">
+          {plural(turns, 'turn')} · {plural(state.history.reduce((n, t) => n + t.moves.length, 0), 'move')} · {plural(state.history.reduce((n, t) => n + t.played.length, 0), 'card')} played
+          {info && <> · deck seed <span className="mono">{info.seed}</span></>}
+        </p>
         <div className="panel-actions">
-          <button className="btn primary" onClick={onRematch}>{online ? 'New game' : 'Rematch'}</button>
+          <button className="btn primary" onClick={onRematch}>{online ? 'New game' : 'Rematch'} <Icon name="arrow-right" size={18} /></button>
+          {onReview && (
+            <button className="btn review-btn" onClick={onReview} data-testid="review-game">
+              <Icon name="review" size={18} /> Review
+            </button>
+          )}
           <button className="btn ghost" onClick={onHome}>Menu</button>
         </div>
       </div>

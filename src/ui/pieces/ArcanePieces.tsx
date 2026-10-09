@@ -15,7 +15,7 @@ interface Paint {
 const paint = (side: Side): Paint =>
   side === 'ember'
     ? { body: 'url(#cu-ember-body)', trim: 'url(#cu-ember-trim)', eye: 'url(#cu-ember-eye)', shade: 'url(#cu-ember-shade)', line: '#5b3a0e', dark: '#3a2208', glow: 'url(#cu-ember-glow)' }
-    : { body: 'url(#cu-tide-body)', trim: 'url(#cu-tide-trim)', eye: 'url(#cu-tide-eye)', shade: 'url(#cu-tide-shade)', line: '#57e8dc', dark: '#05060c', glow: 'url(#cu-tide-glow)' };
+    : { body: 'url(#cu-tide-body)', trim: 'url(#cu-tide-trim)', eye: 'url(#cu-tide-eye)', shade: 'url(#cu-tide-shade)', line: '#9fb3b0', dark: '#05060c', glow: 'url(#cu-tide-glow)' };
 
 const Eyes = ({ p, x1, x2, y, r = 3.2 }: { p: Paint; x1: number; x2: number; y: number; r?: number }) => (
   <g filter="url(#cu-eye-glow)">

@@ -30,11 +30,11 @@ export function DemoBoard({ demo, env }: { demo: Demo; env: BoardEnv }) {
   const drawn = [...s.events].reverse().find((e) => e.type === 'draw' && !e.toHand);
   const card = s.phase === 'moving' ? s.card?.kind : prev.phase === 'moving' ? prev.card?.kind : drawn && drawn.type === 'draw' ? drawn.card.kind : undefined;
   let caption = 'Watch…';
-  if (fresh.some((e) => e.type === 'gameOver')) caption = s.result?.reason === 'checkmate' ? 'Checkmate!' : 'Game over';
+  if (fresh.some((e) => e.type === 'gameOver')) caption = s.result?.reason === 'checkmate' ? 'Checkmate.' : 'Game over';
   else if (fresh.some((e) => e.type === 'reverse')) caption = 'Reverse! The players swap sides.';
   else if (fresh.some((e) => e.type === 'turnEnd' && e.reason === 'check')) caption = `Check! ${mover}’s turn ends right here.`;
   else if (fresh.some((e) => e.type === 'playCard' && e.card.kind === 'skip')) caption = `${mover} plays Skip — two turns in a row.`;
-  else if (fresh.some((e) => e.type === 'skipped')) caption = 'Opponent skipped — go again!';
+  else if (fresh.some((e) => e.type === 'skipped')) caption = 'Opponent skipped. You go again.';
   else if (fresh.some((e) => e.type === 'draw' && e.toHand)) caption = `${mover} drew an action card into their hand and draws again.`;
   else {
     const mv = fresh.find((e) => e.type === 'move');

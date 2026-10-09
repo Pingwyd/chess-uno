@@ -5,13 +5,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { OrbitControls, PerformanceMonitor, Sparkles } from '@react-three/drei';
+import { OrbitControls, PerformanceMonitor } from '@react-three/drei';
 import { BloomEffect, EffectComposer, EffectPass, RenderPass, FXAAEffect, ToneMappingEffect, ToneMappingMode, VignetteEffect, type Effect } from 'postprocessing';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { colorOfPiece, typeOf, type Color } from '../../rules/chess';
 import type { BoardArrow, BoardProps } from '../Board';
 import { useBoardInteraction } from '../useBoardInteraction';
-import { useReducedMotion, useSettings } from '../settings/store';
+import { resolvedTheme, useReducedMotion, useSettings } from '../settings/store';
 import { LOW_LEVEL, QualityGovernor, qualityFor, type Quality } from './quality';
 import { cameraPreset, homeAzimuth, pieceYaw, squareToWorld, trackPieces, type CameraPreset, type TrackedPiece } from './mapping';
 import { PIECE_HEIGHT, pieceGeometry, type Set3D } from './pieceGeometry';
@@ -39,6 +39,8 @@ export default function Board3D(props: BoardProps) {
   const q = qualityFor(graphics === 'high' ? 0 : graphics === 'low' ? LOW_LEVEL : autoLevel, deviceDpr);
   const step = (dir: 'decline' | 'incline') => { const g = governor.current; if (g[dir](performance.now())) setAutoLevel(g.level); };
   const set: Set3D = pieceSet === 'classic' ? 'classic' : 'arcane';
+  // Neutral studio backdrop that follows the paper / ink theme.
+  const stage = resolvedTheme(useSettings()) === 'dark' ? '#151515' : '#e6e4dd';
 
   return (
     <div className={`board3d ${interactive ? 'board3d-live' : ''}`} data-testid="board-3d">
@@ -47,25 +49,19 @@ export default function Board3D(props: BoardProps) {
         dpr={q.dpr}
         camera={{ fov: 36, near: 0.1, far: 90, position: [0, 9, 9] }}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
-        onCreated={({ gl }) => { gl.toneMappingExposure = 1.05; }}
+        onCreated={({ gl }) => { gl.toneMappingExposure = 0.95; }}
       >
         {graphics === 'auto' && <PerformanceMonitor onDecline={() => step('decline')} onIncline={() => step('incline')} />}
-        <color attach="background" args={['#0b0918']} />
-        <fog attach="fog" args={['#0b0918', 18, 38]} />
+        <color attach="background" args={[stage]} />
+        <fog attach="fog" args={[stage, 18, 38]} />
         <Lights shadowMap={q.shadowMap} home={homeAzimuth(bottomColor)} />
         {q.reflections && <StudioEnvironment />}
         <CameraRig home={homeAzimuth(bottomColor)} mode={faceTopPieces ? 'pass' : 'play'} resetKey={resetKey} reduced={reduced} />
-        <BoardMesh bottomColor={bottomColor} ia={ia} />
+        <BoardMesh bottomColor={bottomColor} ia={ia} floor={stage} />
         <Highlights state={state} ia={ia} />
         <Pieces state={state} set={set} bottomColor={bottomColor} faceTop={faceTopPieces} anim={anim} ia={ia} reduced={reduced} contact={q.shadowMap === 0} />
         <Badges state={state} ia={ia} />
         {props.arrows && props.arrows.length > 0 && <Arrows3D arrows={props.arrows} />}
-        {!reduced && q.particles && (
-          <>
-            <Sparkles count={36} scale={[13, 3.5, 13]} position={[0, 1.6, 0]} size={2.2} speed={0.25} opacity={0.55} color="#ffc27a" />
-            <Sparkles count={30} scale={[13, 3.5, 13]} position={[0, 1.6, 0]} size={2} speed={0.2} opacity={0.5} color="#5ff2e6" />
-          </>
-        )}
         {q.bloom > 0 && <PostFX bloom={q.bloom} />}
         <TestHook ia={ia} quality={q} />
       </Canvas>
@@ -93,10 +89,10 @@ function PostFX({ bloom }: { bloom: number }) {
     const c = new EffectComposer(gl, { frameBufferType: THREE.HalfFloatType, multisampling: samples });
     c.addPass(new RenderPass(scene, camera));
     const effects: Effect[] = [
-      new BloomEffect({ mipmapBlur: true, intensity: 0.75, luminanceThreshold: 0.9, luminanceSmoothing: 0.2, radius: 0.7, resolutionScale: bloom }),
+      new BloomEffect({ mipmapBlur: true, intensity: 0.22, luminanceThreshold: 0.95, luminanceSmoothing: 0.2, radius: 0.7, resolutionScale: bloom }),
       // Same ACES curve the plain renderer uses, so switching the composer on/off doesn't shift colours.
       new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }),
-      new VignetteEffect({ offset: 0.32, darkness: 0.55 }),
+      new VignetteEffect({ offset: 0.4, darkness: 0.18 }),
     ];
     if (samples < 2) effects.push(new FXAAEffect());
     c.addPass(new EffectPass(camera, ...effects));
@@ -120,21 +116,21 @@ function StudioEnvironment() {
   const scene = useThree((s) => s.scene);
   useEffect(() => {
     const studio = new THREE.Scene();
-    studio.background = new THREE.Color('#0d0b1c');
+    studio.background = new THREE.Color('#202020');
     const panel = (color: string, intensity: number, pos: [number, number, number], size: [number, number]) => {
       const m = new THREE.Mesh(new THREE.PlaneGeometry(...size), new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity), side: THREE.DoubleSide }));
       m.position.set(...pos);
       m.lookAt(0, 0, 0);
       studio.add(m);
     };
-    panel('#ffd9a0', 1.3, [0, 6, 8], [12, 4]);
-    panel('#7a5cff', 1.0, [-8, 3, -4], [6, 6]);
-    panel('#2fe6d6', 1.0, [8, 3, -6], [6, 6]);
-    panel('#fff3dc', 1.1, [0, 12, 0], [14, 14]);
+    panel('#ffffff', 1.2, [0, 6, 8], [12, 4]);
+    panel('#f2f2f2', 0.8, [-8, 3, -4], [6, 6]);
+    panel('#f2f2f2', 0.8, [8, 3, -6], [6, 6]);
+    panel('#ffffff', 1.1, [0, 12, 0], [14, 14]);
     const pmrem = new THREE.PMREMGenerator(gl);
     const env = pmrem.fromScene(studio, 0.03).texture;
     scene.environment = env;
-    scene.environmentIntensity = 0.55;
+    scene.environmentIntensity = 0.4;
     return () => { scene.environment = null; env.dispose(); pmrem.dispose(); studio.traverse((o) => { const m = o as THREE.Mesh; m.geometry?.dispose(); (m.material as THREE.Material | undefined)?.dispose(); }); };
   }, [gl, scene]);
   return null;
@@ -152,11 +148,11 @@ function Lights({ shadowMap, home }: { shadowMap: number; home: number }) {
   });
   return (
     <group ref={group} rotation={[0, home, 0]}>
-      <hemisphereLight args={['#b8a6ff', '#2a1a10', 0.55]} />
+      <hemisphereLight args={['#ffffff', '#4a4741', 0.42]} />
       <directionalLight
         position={[5, 11, 7]}
-        intensity={2.4}
-        color="#ffe6c2"
+        intensity={1.75}
+        color="#fffaf2"
         castShadow={shadowMap > 0}
         shadow-mapSize={[shadowMap || 1024, shadowMap || 1024]}
         shadow-camera-left={-6.5}
@@ -169,9 +165,9 @@ function Lights({ shadowMap, home }: { shadowMap: number; home: number }) {
         shadow-normalBias={0.025}
         shadow-radius={5}
       />
-      <directionalLight position={[-6, 5, -7]} intensity={1.3} color="#57d8ff" />
-      <pointLight position={[0, 3, 6.4]} intensity={9} distance={10} decay={2} color="#ff9a3c" />
-      <pointLight position={[0, 3, -6.4]} intensity={7} distance={10} decay={2} color="#3fd8e6" />
+      {/* soft neutral fill and a cool-white rim, no coloured lights */}
+      <directionalLight position={[-7, 6, 3]} intensity={0.35} color="#f4f6f8" />
+      <directionalLight position={[-4, 5, -8]} intensity={0.55} color="#ffffff" />
     </group>
   );
 }
@@ -278,8 +274,8 @@ function CameraRig({ home, mode, resetKey, reduced }: { home: number; mode: 'pas
 
 // ------------------------------------------------------------ board
 
-const LIGHT_SQ = new THREE.MeshStandardMaterial({ color: '#e4d3b0', roughness: 0.6, metalness: 0.02 });
-const DARK_SQ = new THREE.MeshStandardMaterial({ color: '#36596a', roughness: 0.5, metalness: 0.08 });
+const LIGHT_SQ = new THREE.MeshStandardMaterial({ color: '#ece8dc', roughness: 0.75, metalness: 0 });
+const DARK_SQ = new THREE.MeshStandardMaterial({ color: '#86998b', roughness: 0.75, metalness: 0 });
 const SQ_GEO = new THREE.BoxGeometry(0.985, 0.08, 0.985);
 
 function labelTexture(text: string) {
@@ -287,8 +283,8 @@ function labelTexture(text: string) {
   c.width = c.height = 128; // 2x so the coordinates stay sharp on high-DPI screens
   const g = c.getContext('2d')!;
   g.scale(2, 2);
-  g.fillStyle = '#f0d9a2';
-  g.font = '700 42px Cinzel, Georgia, serif';
+  g.fillStyle = '#e9e6dc';
+  g.font = '400 40px Anton, Impact, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(text, 32, 35);
@@ -298,7 +294,7 @@ function labelTexture(text: string) {
   return t;
 }
 
-function BoardMesh({ bottomColor, ia }: { bottomColor: Color; ia: Interaction }) {
+function BoardMesh({ bottomColor, ia, floor }: { bottomColor: Color; ia: Interaction; floor: string }) {
   const labels = useMemo(() => {
     const out: { key: string; tex: THREE.Texture; x: number; z: number }[] = [];
     for (let i = 0; i < 8; i++) {
@@ -312,21 +308,6 @@ function BoardMesh({ bottomColor, ia }: { bottomColor: Color; ia: Interaction })
     return out;
   }, []);
   const yaw = homeAzimuth(bottomColor);
-  const halo = useMemo(() => {
-    const c = document.createElement('canvas');
-    c.width = c.height = 128;
-    const g = c.getContext('2d')!;
-    const grad = g.createRadialGradient(64, 64, 10, 64, 64, 64);
-    grad.addColorStop(0, 'rgba(138,92,255,0.55)');
-    grad.addColorStop(0.5, 'rgba(47,230,214,0.12)');
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    g.fillStyle = grad;
-    g.fillRect(0, 0, 128, 128);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    return t;
-  }, []);
-
   const squares = [];
   for (let sq = 0; sq < 64; sq++) {
     const [x, z] = squareToWorld(sq);
@@ -344,47 +325,32 @@ function BoardMesh({ bottomColor, ia }: { bottomColor: Color; ia: Interaction })
       />,
     );
   }
-  const strip = (color: string, pos: [number, number, number], size: [number, number, number], k: string) => (
-    <mesh key={k} position={pos} raycast={() => null}>
-      <boxGeometry args={size} />
-      <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.6} toneMapped={false} />
-    </mesh>
-  );
   return (
     <group>
       {squares}
-      {/* frame slab with a gold lip */}
+      {/* felt-green frame slab with a thin dark lip */}
       <mesh position={[0, -0.3, 0]} receiveShadow castShadow raycast={() => null}>
         <boxGeometry args={[9.8, 0.52, 9.8]} />
-        <meshStandardMaterial color="#1a1533" roughness={0.32} metalness={0.55} />
+        <meshStandardMaterial color="#1d3a2f" roughness={0.85} metalness={0} />
       </mesh>
       <mesh position={[0, -0.05, 0]} raycast={() => null}>
         <boxGeometry args={[9.9, 0.04, 9.9]} />
-        <meshStandardMaterial color="#c9973f" roughness={0.3} metalness={1} />
+        <meshStandardMaterial color="#12241d" roughness={0.8} metalness={0} />
       </mesh>
       <mesh position={[0, -0.03, 0]} receiveShadow raycast={() => null}>
         <boxGeometry args={[9.7, 0.04, 9.7]} />
-        <meshStandardMaterial color="#1d1838" roughness={0.4} metalness={0.4} />
+        <meshStandardMaterial color="#1d3a2f" roughness={0.9} metalness={0} />
       </mesh>
-      {/* glowing inlay: ember gold on White's side, tide teal on Black's, violet along the files */}
-      {strip('#ffb347', [0, -0.005, 4.06], [8.18, 0.03, 0.05], 's1')}
-      {strip('#2fe6d6', [0, -0.005, -4.06], [8.18, 0.03, 0.05], 's2')}
-      {strip('#8a5cff', [4.06, -0.005, 0], [0.05, 0.03, 8.18], 's3')}
-      {strip('#8a5cff', [-4.06, -0.005, 0], [0.05, 0.03, 8.18], 's4')}
       {labels.map((l) => (
         <mesh key={l.key} position={[l.x, -0.005, l.z]} rotation={[-Math.PI / 2, 0, yaw]} raycast={() => null}>
           <planeGeometry args={[0.36, 0.36]} />
           <meshBasicMaterial map={l.tex} transparent depthWrite={false} />
         </mesh>
       ))}
-      {/* floor + soft arcane halo */}
+      {/* plain studio floor in the theme's stage colour */}
       <mesh position={[0, -0.57, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow raycast={() => null}>
         <circleGeometry args={[40, 48]} />
-        <meshStandardMaterial color="#0a0816" roughness={1} metalness={0} />
-      </mesh>
-      <mesh position={[0, -0.555, 0]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
-        <planeGeometry args={[24, 24]} />
-        <meshBasicMaterial map={halo} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
+        <meshStandardMaterial color={floor} roughness={1} metalness={0} />
       </mesh>
     </group>
   );
@@ -410,18 +376,18 @@ function Highlights({ state, ia }: { state: BoardProps['state']; ia: Interaction
   const out = [];
   for (const sq of ia.fromSquares) {
     const [x, z] = squareToWorld(sq);
-    out.push(<mesh key={`f${sq}`} position={[x, 0.004, z]} rotation={flat} raycast={noRay}><planeGeometry args={[0.98, 0.98]} /><meshBasicMaterial color="#ffb347" transparent opacity={0.22} depthWrite={false} /></mesh>);
+    out.push(<mesh key={`f${sq}`} position={[x, 0.004, z]} rotation={flat} raycast={noRay}><planeGeometry args={[0.98, 0.98]} /><meshBasicMaterial color="#f0c428" transparent opacity={0.34} depthWrite={false} /></mesh>);
   }
   for (const sq of ia.moveBadge.keys()) {
     const [x, z] = squareToWorld(sq);
-    out.push(<mesh key={`t${sq}`} position={[x, 0.005, z]} rotation={flat} raycast={noRay}><planeGeometry args={[0.98, 0.98]} /><meshBasicMaterial color="#ffb347" transparent opacity={0.38} depthWrite={false} /></mesh>);
+    out.push(<mesh key={`t${sq}`} position={[x, 0.005, z]} rotation={flat} raycast={noRay}><planeGeometry args={[0.98, 0.98]} /><meshBasicMaterial color="#f0c428" transparent opacity={0.5} depthWrite={false} /></mesh>);
   }
   if (ia.selected !== null) {
     const [x, z] = squareToWorld(ia.selected);
     out.push(
       <group key="sel" position={[x, 0.006, z]}>
-        <mesh rotation={flat} raycast={noRay}><planeGeometry args={[0.98, 0.98]} /><meshBasicMaterial color="#2fe6d6" transparent opacity={0.35} depthWrite={false} /></mesh>
-        <mesh rotation={flat} position={[0, 0.002, 0]} raycast={noRay}><ringGeometry args={[0.4, 0.47, 40]} /><meshBasicMaterial color={new THREE.Color('#5ff2e6').multiplyScalar(2)} toneMapped={false} transparent opacity={0.95} /></mesh>
+        <mesh rotation={flat} raycast={noRay}><planeGeometry args={[0.98, 0.98]} /><meshBasicMaterial color="#0e0e0e" transparent opacity={0.16} depthWrite={false} /></mesh>
+        <mesh rotation={flat} position={[0, 0.002, 0]} raycast={noRay}><ringGeometry args={[0.4, 0.47, 40]} /><meshBasicMaterial color="#0e0e0e" transparent opacity={0.85} /></mesh>
       </group>,
     );
   }
@@ -430,9 +396,9 @@ function Highlights({ state, ia }: { state: BoardProps['state']; ia: Interaction
     const capture = !!state.pos.board[sq];
     out.push(
       capture ? (
-        <mesh key={`c${sq}`} position={[x, 0.01, z]} rotation={flat} raycast={noRay}><ringGeometry args={[0.38, 0.47, 40]} /><meshBasicMaterial color={new THREE.Color('#ff5470').multiplyScalar(2.2)} toneMapped={false} transparent opacity={0.95} /></mesh>
+        <mesh key={`c${sq}`} position={[x, 0.01, z]} rotation={flat} raycast={noRay}><ringGeometry args={[0.38, 0.47, 40]} /><meshBasicMaterial color="#0e0e0e" transparent opacity={0.5} /></mesh>
       ) : (
-        <mesh key={`d${sq}`} position={[x, 0.01, z]} rotation={flat} raycast={noRay}><circleGeometry args={[0.13, 28]} /><meshBasicMaterial color={new THREE.Color('#5ff2e6').multiplyScalar(1.8)} toneMapped={false} transparent opacity={0.9} /></mesh>
+        <mesh key={`d${sq}`} position={[x, 0.01, z]} rotation={flat} raycast={noRay}><circleGeometry args={[0.13, 28]} /><meshBasicMaterial color="#0e0e0e" transparent opacity={0.36} /></mesh>
       ),
     );
   }
@@ -445,10 +411,10 @@ function Highlights({ state, ia }: { state: BoardProps['state']; ia: Interaction
         return (
           <group key={`k${sq}`} position={[x, 0.012, z]}>
             <group ref={pulse}>
-              <mesh rotation={flat} raycast={noRay}><circleGeometry args={[0.5, 40]} /><meshBasicMaterial color={new THREE.Color('#ff3250').multiplyScalar(1.6)} toneMapped={false} transparent opacity={0.6} depthWrite={false} /></mesh>
-              <mesh rotation={flat} position={[0, 0.003, 0]} raycast={noRay}><ringGeometry args={[0.42, 0.5, 40]} /><meshBasicMaterial color={new THREE.Color('#ff5470').multiplyScalar(3)} toneMapped={false} transparent opacity={0.9} /></mesh>
+              <mesh rotation={flat} raycast={noRay}><circleGeometry args={[0.5, 40]} /><meshBasicMaterial color="#e0332b" transparent opacity={0.6} depthWrite={false} /></mesh>
+              <mesh rotation={flat} position={[0, 0.003, 0]} raycast={noRay}><ringGeometry args={[0.42, 0.5, 40]} /><meshBasicMaterial color="#b3221b" transparent opacity={0.95} /></mesh>
             </group>
-            <pointLight position={[0, 0.8, 0]} color="#ff3250" intensity={6} distance={3} decay={2} />
+            
           </group>
         );
       })}
@@ -465,17 +431,20 @@ function badgeTexture(n: number, color: Color) {
   c.width = c.height = 192;
   const g = c.getContext('2d')!;
   g.scale(2, 2);
-  const grad = g.createLinearGradient(0, 8, 0, 88);
-  if (color === 'w') { grad.addColorStop(0, '#ffe08a'); grad.addColorStop(1, '#ff9a1f'); } else { grad.addColorStop(0, '#8ffff0'); grad.addColorStop(1, '#1fa8b5'); }
-  g.shadowColor = 'rgba(0,0,0,0.55)';
-  g.shadowBlur = 10;
+  // Flat ink/paper disc with a hard offset shadow, like the 2D move badges.
   g.beginPath();
-  g.arc(48, 48, 36, 0, Math.PI * 2);
-  g.fillStyle = grad;
+  g.arc(52, 52, 34, 0, Math.PI * 2);
+  g.fillStyle = '#0e0e0e';
   g.fill();
-  g.shadowBlur = 0;
-  g.fillStyle = color === 'w' ? '#3a1c00' : '#04202a';
-  g.font = '900 46px Nunito, system-ui, sans-serif';
+  g.beginPath();
+  g.arc(48, 48, 34, 0, Math.PI * 2);
+  g.fillStyle = color === 'w' ? '#ffffff' : '#0e0e0e';
+  g.fill();
+  g.lineWidth = 4;
+  g.strokeStyle = color === 'w' ? '#0e0e0e' : '#ffffff';
+  g.stroke();
+  g.fillStyle = color === 'w' ? '#0e0e0e' : '#ffffff';
+  g.font = '400 44px Anton, Impact, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(String(n), 48, 51);
@@ -505,7 +474,7 @@ function Badges({ state, ia }: { state: BoardProps['state']; ia: Interaction }) 
 
 // ------------------------------------------------------------ analysis arrows
 
-const ARROW_COLOR: Record<BoardArrow['tone'], string> = { best: '#3ee08f', played: '#ff6b5a', threat: '#ffb02e' };
+const ARROW_COLOR: Record<BoardArrow['tone'], string> = { best: '#16a34a', played: '#e0332b', threat: '#e7a20f' };
 const headGeometry = (() => {
   const sh = new THREE.Shape();
   sh.moveTo(0, 0.24); sh.lineTo(-0.25, -0.14); sh.lineTo(0.25, -0.14); sh.lineTo(0, 0.24);
@@ -524,8 +493,8 @@ function arrowLabelTexture(text: string, tone: BoardArrow['tone']) {
   g.arc(48, 48, 38, 0, Math.PI * 2);
   g.fillStyle = ARROW_COLOR[tone];
   g.fill();
-  g.fillStyle = '#0c1a12';
-  g.font = '900 50px Nunito, system-ui, sans-serif';
+  g.fillStyle = '#ffffff';
+  g.font = '400 48px Anton, Impact, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.fillText(text, 48, 52);
@@ -548,7 +517,7 @@ function Arrows3D({ arrows }: { arrows: BoardArrow[] }) {
         const start = 0.2, end = len - 0.32;
         const shaft = Math.max(0.05, end - start);
         const yaw = Math.atan2(dx, dz);
-        const color = new THREE.Color(ARROW_COLOR[a.tone]).multiplyScalar(1.8);
+        const color = new THREE.Color(ARROW_COLOR[a.tone]);
         const y = 0.03 + i * 0.002;
         return (
           <group key={i}>

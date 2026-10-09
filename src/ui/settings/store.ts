@@ -6,6 +6,7 @@ import { useSyncExternalStore } from 'react';
 
 export type MotionPref = 'system' | 'on' | 'off';
 export type GraphicsPref = 'auto' | 'high' | 'low';
+export type ThemePref = 'system' | 'light' | 'dark';
 
 export interface Settings {
   /** Show legal-move dots/rings for the selected piece. */
@@ -24,12 +25,14 @@ export interface Settings {
   avatar: string | null;
   /** 3D board rendering: adaptive, always full effects, or effects off (resolution stays crisp). */
   graphics: GraphicsPref;
+  /** Paper (light, default), ink (dark), or follow the OS. */
+  theme: ThemePref;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   hints: true, confirmMoves: false, sfxVolume: 0.8, musicVolume: 0, vibration: true,
   notify: { turn: true, friends: true, challenges: true, streak: true },
-  reducedMotion: 'system', avatar: null, graphics: 'auto',
+  reducedMotion: 'system', avatar: null, graphics: 'auto', theme: 'light',
 };
 
 const KEY = 'cu.settings';
@@ -63,3 +66,20 @@ const systemReduced = () => typeof matchMedia !== 'undefined' && matchMedia('(pr
 /** The effective reduced-motion flag (setting, or the OS preference when set to "system"). */
 export const reducedMotion = (s: Settings = current) => (s.reducedMotion === 'system' ? systemReduced() : s.reducedMotion === 'on');
 export const useReducedMotion = () => reducedMotion(useSettings());
+
+const systemDark = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-color-scheme: dark)').matches;
+/** The effective colour theme. */
+export const resolvedTheme = (s: Settings = current): 'light' | 'dark' => (s.theme === 'system' ? (systemDark() ? 'dark' : 'light') : s.theme);
+
+/** Puts the theme on <html data-theme> (and the browser chrome colour); follows the OS when set to "system". */
+export function applyTheme(s: Settings = current) {
+  if (typeof document === 'undefined') return;
+  const t = resolvedTheme(s);
+  document.documentElement.dataset.theme = t;
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', t === 'dark' ? '#0e0e0e' : '#f3f2ee');
+}
+if (typeof window !== 'undefined') {
+  applyTheme();
+  subscribeSettings(() => applyTheme());
+  window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyTheme());
+}

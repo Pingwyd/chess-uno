@@ -48,15 +48,18 @@ export function PieceDefs() {
           <stop offset="1" stopColor="#000" stopOpacity="0.45" />
         </radialGradient>
 
+        {/* Neutral contact shadow (was a neon outline glow). */}
         <filter id="cu-ember-glow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation="2.2" result="b" />
-          <feFlood floodColor="#ffae3a" floodOpacity="0.75" />
+          <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="b0" />
+          <feOffset in="b0" dx="0" dy="1.5" result="b" />
+          <feFlood floodColor="#000" floodOpacity="0.28" />
           <feComposite in2="b" operator="in" result="g" />
           <feMerge><feMergeNode in="g" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
         <filter id="cu-tide-glow" x="-30%" y="-30%" width="160%" height="160%">
-          <feGaussianBlur in="SourceAlpha" stdDeviation="2.2" result="b" />
-          <feFlood floodColor="#2fe6d6" floodOpacity="0.85" />
+          <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="b0" />
+          <feOffset in="b0" dx="0" dy="1.5" result="b" />
+          <feFlood floodColor="#000" floodOpacity="0.28" />
           <feComposite in2="b" operator="in" result="g" />
           <feMerge><feMergeNode in="g" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>

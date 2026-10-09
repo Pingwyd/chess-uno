@@ -29,17 +29,19 @@ export function CollectionTab({ pieceSet, onPieceSet, onLearn }: { pieceSet: Pie
 
   return (
     <div className="coll" data-testid="collection">
-      <section className={`set-card coll-hero skin-w-${p.skins.w} skin-b-${p.skins.b}`}>
-        <div className="coll-pieces" aria-hidden>
-          <Piece piece="K" set={pieceSet} /><Piece piece="k" set={pieceSet} />
+      <section className={`coll-hero skin-w-${p.skins.w} skin-b-${p.skins.b}`}>
+        <div className="pedestal-stage" aria-hidden>
+          <div className="pedestal-piece pp-w"><Piece piece="K" set={pieceSet} /></div>
+          <div className="pedestal-piece pp-b"><Piece piece="q" set={pieceSet} /></div>
+          <div className="pedestal" />
         </div>
         <div className="coll-sum">
-          <h3>Your collection</h3>
+          <span className="eyebrow">Your collection</span>
           <div className="coll-meters">
             <Meter label="Badges" n={got} of={BADGES.length} />
             <Meter label="Skins" n={skinsOwned} of={WHITE.length + BLACK.length} />
           </div>
-          <small>{arcane ? `Playing ${SKIN_NAMES[p.skins.w]} vs ${SKIN_NAMES[p.skins.b]}` : 'Classic pieces · skins apply to Arcane Forge'}</small>
+          <small>{arcane ? `Playing ${SKIN_NAMES[p.skins.w]} vs ${SKIN_NAMES[p.skins.b]}.` : 'Classic pieces. Skins apply to the Arcane set.'}</small>
         </div>
       </section>
 
@@ -76,10 +78,10 @@ export function CollectionTab({ pieceSet, onPieceSet, onLearn }: { pieceSet: Pie
         <div className="card-head">
           <h3>Badges <small>{got}/{BADGES.length}</small></h3>
         </div>
-        <div className="fchips">
+        <div className="seg seg-small fchips">
           {(['all', 'earned', 'locked'] as const).map((f) => (
-            <button key={f} className={`fchip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)} data-testid={`badges-${f}`}>
-              {f === 'all' ? 'All' : f === 'earned' ? `Earned · ${got}` : `To earn · ${BADGES.length - got}`}
+            <button key={f} className={`seg-btn fchip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)} data-testid={`badges-${f}`}>
+              {f === 'all' ? 'All' : f === 'earned' ? `Earned ${got}` : `To earn ${BADGES.length - got}`}
             </button>
           ))}
         </div>
@@ -100,7 +102,7 @@ export function CollectionTab({ pieceSet, onPieceSet, onLearn }: { pieceSet: Pie
               </div>
             );
           })}
-          {!shown.length && <p className="prof-note">{filter === 'earned' ? 'No badges yet. Finish your first lesson to earn one.' : 'You have every badge!'}</p>}
+          {!shown.length && <p className="prof-note">{filter === 'earned' ? 'No badges yet. Finish your first lesson to earn one.' : 'Every badge earned.'}</p>}
         </div>
         <button className="btn ghost small coll-learn" onClick={onLearn} data-testid="collection-learn"><Icon name="graduation-cap" size={16} /> Earn more on the Learn path</button>
       </section>

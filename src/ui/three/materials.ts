@@ -26,18 +26,18 @@ export function pieceMaterials(set: Set3D, white: boolean): PieceMaterials {
       ? {
           // Ember: ivory porcelain with forged gold and molten amber eyes.
           body: new THREE.MeshStandardMaterial({ color: '#f3e7cc', roughness: 0.38, metalness: 0.04 }),
-          trim: new THREE.MeshStandardMaterial({ color: '#f0b850', roughness: 0.42, metalness: 0.75, emissive: '#6a4000', emissiveIntensity: 0.45 }),
+          trim: new THREE.MeshStandardMaterial({ color: '#f0b850', roughness: 0.42, metalness: 0.75, emissive: '#6a4000', emissiveIntensity: 0.08 }),
           dark: new THREE.MeshStandardMaterial({ color: '#2b1505', roughness: 0.85 }),
-          eye: new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb347').multiplyScalar(3.2), toneMapped: false }),
-          gem: new THREE.MeshStandardMaterial({ color: '#ff9a3c', emissive: '#ff7a1a', emissiveIntensity: 2.2, roughness: 0.15, metalness: 0.2, toneMapped: false }),
+          eye: new THREE.MeshBasicMaterial({ color: new THREE.Color('#ffb347').multiplyScalar(1.3), toneMapped: false }),
+          gem: new THREE.MeshStandardMaterial({ color: '#ff9a3c', emissive: '#ff7a1a', emissiveIntensity: 0.6, roughness: 0.15, metalness: 0.2, toneMapped: false }),
         }
       : {
-          // Tide: polished obsidian with teal-violet runes and sea-glass eyes.
+          // Tide: polished obsidian with muted sea-glass trim; no neon emissive glow.
           body: new THREE.MeshStandardMaterial({ color: '#1c1b38', roughness: 0.2, metalness: 0.45 }),
-          trim: new THREE.MeshStandardMaterial({ color: '#2fd6c8', roughness: 0.3, metalness: 0.85, emissive: '#0b5e5a', emissiveIntensity: 0.5 }),
+          trim: new THREE.MeshStandardMaterial({ color: '#7fa8a3', roughness: 0.35, metalness: 0.8, emissive: '#0b5e5a', emissiveIntensity: 0.05 }),
           dark: new THREE.MeshStandardMaterial({ color: '#030409', roughness: 0.9 }),
-          eye: new THREE.MeshBasicMaterial({ color: new THREE.Color('#38f3e2').multiplyScalar(3.2), toneMapped: false }),
-          gem: new THREE.MeshStandardMaterial({ color: '#9b70ff', emissive: '#8a5cff', emissiveIntensity: 2.6, roughness: 0.15, metalness: 0.2, toneMapped: false }),
+          eye: new THREE.MeshBasicMaterial({ color: new THREE.Color('#bfe9e4').multiplyScalar(1.1), toneMapped: false }),
+          gem: new THREE.MeshStandardMaterial({ color: '#8f86b8', emissive: '#8a5cff', emissiveIntensity: 0.25, roughness: 0.15, metalness: 0.2, toneMapped: false }),
         };
     const sk = SKIN_3D[skin];
     if (sk) {

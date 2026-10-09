@@ -97,7 +97,7 @@ export function PlayerZone(props: Props) {
         <div className="zone-deck-slot">
           {showCard ? (
             <div className="current-card">
-              <CardFace kind={state.card!.kind} size={compact ? 'sm' : 'md'} className="card-active" />
+              <CardFace kind={state.card!.kind} size={compact ? 'sm' : 'lg'} className={`card-active ${compact ? '' : 'card-hero'}`} />
             </div>
           ) : (
             <button

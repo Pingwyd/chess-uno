@@ -11,7 +11,7 @@ import { outcome, when, type OpenReplay } from '../RecentGames';
 import { setSettings, useSettings } from './store';
 import { localStats, type Stats } from './stats';
 import type { GameSummary } from '../../replay/record';
-import { Icon, asIcon } from '../icons';
+import { Icon } from '../icons';
 
 
 const pct = (s: Pick<Stats, 'w' | 'l' | 'd'>) => {
@@ -52,23 +52,20 @@ export function ProfileTab({ onSignUp, onReplay, onCollection }: {
     ? { w: user.wins, l: user.losses, d: user.draws, streak: profile?.streak.current ?? 0, best: profile?.streak.best ?? 0 }
     : local;
 
+  const history = profile?.ratingHistory ?? [];
   return (
     <div className="prof" data-testid="profile">
-      <section className="set-card prof-head">
+      <section className="prof-head">
         <button className="prof-avatar" onClick={() => setPicker((v) => !v)} aria-label="Change avatar" data-testid="avatar-btn">
-          <Avatar name={name} avatar={avatar} size={76} />
-          <span className="prof-avatar-edit"><Icon name="pencil" size={13} /></span>
+          <Avatar name={name} avatar={avatar} size={64} />
+          <span className="prof-avatar-edit"><Icon name="pencil" size={12} /></span>
         </button>
         <div className="prof-id">
           <NameRow user={user} account={account} />
           <div className="prof-sub">
             {account ? <>Member since {new Date(profile?.memberSince ?? Date.now()).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</>
-              : user ? 'Guest · stats on this device' : 'Playing offline · stats on this device'}
+              : user ? 'Guest. Stats are kept on this device.' : 'Offline. Stats are kept on this device.'}
           </div>
-        </div>
-        <div className={`prof-rating ${account ? '' : 'muted'}`} data-testid="profile-rating">
-          <b>{account ? user!.rating : '—'}</b>
-          <small>{account ? (user!.ratedGames ? `${user!.ratedGames} rated` : 'provisional') : 'no rating'}</small>
         </div>
       </section>
 
@@ -81,14 +78,30 @@ export function ProfileTab({ onSignUp, onReplay, onCollection }: {
         </section>
       )}
 
+      <section className={`ink rating-panel ${account ? '' : 'muted'}`} data-testid="profile-rating">
+        <div className="rp-top">
+          <div>
+            <span className="eyebrow">Rating</span>
+            <b className="rp-num">{account ? user!.rating : '—'}</b>
+          </div>
+          <div className="rp-side">
+            <small>{account ? (user!.ratedGames ? `${user!.ratedGames} rated games` : 'Provisional') : 'No rating yet'}</small>
+            {account && history.length > 1 && (() => {
+              const d = history[history.length - 1].r - history[0].r;
+              return <b className={d >= 0 ? 'up' : 'down'}>{d >= 0 ? `+${d}` : d}</b>;
+            })()}
+          </div>
+        </div>
+        {account && <RatingChart points={history} />}
+      </section>
+
       {!account && (
-        <section className="set-card cta" data-testid="guest-cta">
-          <span className="cta-icon"><Icon name="sparkles" size={26} /></span>
+        <section className="cta" data-testid="guest-cta">
           <div>
             <b>{HAS_SERVER ? 'Create a free account' : 'Accounts are coming soon'}</b>
-            <small>{HAS_SERVER ? 'Get a rating and chart, add friends, challenge them and sync your learning path. Your guest games carry over.' : 'Ratings, friends and live games arrive with online play. Your stats below are saved on this device.'}</small>
+            <small>{HAS_SERVER ? 'A rating and chart, friends, challenges, and your learning path synced. Guest games carry over.' : 'Ratings, friends and live games arrive with online play. Stats below are saved on this device.'}</small>
           </div>
-          {HAS_SERVER && <button className="btn primary small" onClick={onSignUp} data-testid="profile-signup">Sign up</button>}
+          {HAS_SERVER && <button className="btn primary" onClick={onSignUp} data-testid="profile-signup">Sign up <Icon name="arrow-right" size={16} /></button>}
         </section>
       )}
 
@@ -97,22 +110,17 @@ export function ProfileTab({ onSignUp, onReplay, onCollection }: {
         <Stat label="Losses" value={stats.l} tone="loss" />
         <Stat label="Draws" value={stats.d} />
         <Stat label="Win rate" value={pct(stats)} />
-        <Stat label="Streak" value={stats.streak ? <><Icon name="flame" size={18} /> {stats.streak}</> : '0'} sub={`best ${stats.best}`} />
+        <Stat label="Streak" value={stats.streak} sub={`best ${stats.best}`} />
       </section>
-      {account && (local.w + local.l + local.d > 0) && <p className="prof-note">Online games above · vs bots on this device: {local.w}W {local.l}L {local.d}D</p>}
+      {account && (local.w + local.l + local.d > 0) && <p className="prof-note">Online games above. Vs bots on this device: {local.w}W {local.l}L {local.d}D.</p>}
 
-      {account && (
-        <section className="set-card">
-          <h3>Rating</h3>
-          <RatingChart points={profile?.ratingHistory ?? []} />
-        </section>
-      )}
-
-      <button className="set-card coll-teaser" onClick={onCollection} data-testid="open-collection">
-        <span className="coll-teaser-icons">{earned.slice(0, 4).map((b) => <i key={b.id}><Icon name={asIcon(b.icon)} size={16} /></i>)}{!earned.length && <i><Icon name="award" size={16} /></i>}</span>
-        <span className="coll-teaser-text"><b>Badges &amp; skins</b><small>{earned.length}/{BADGES.length} badges · {SKIN_NAMES[progress.skins.w]} vs {SKIN_NAMES[progress.skins.b]}</small></span>
-        <span className="chev"><Icon name="chevron-right" size={20} /></span>
-      </button>
+      <div className="rows">
+        <button className="row coll-teaser" onClick={onCollection} data-testid="open-collection">
+          <span className="row-icon"><Icon name="award" size={20} /></span>
+          <span className="row-main"><b>Badges &amp; skins</b><small>{earned.length}/{BADGES.length} badges · {SKIN_NAMES[progress.skins.w]} vs {SKIN_NAMES[progress.skins.b]}</small></span>
+          <Icon name="chevron-right" size={18} className="chev" />
+        </button>
+      </div>
       <Recent games={games} online={online} onReplay={onReplay} />
     </div>
   );
@@ -127,7 +135,7 @@ function NameRow({ user, account }: { user: PublicUser | null; account: boolean 
     return (
       <div className="prof-name" data-testid="profile-name">
         {user?.name ?? 'You'}
-        {user?.guest && <span className="guest-tag">GUEST</span>}
+        {user?.guest && <span className="guest-tag">Guest</span>}
         {account && <button className="link-btn" onClick={() => setEdit(true)} data-testid="edit-name">Edit</button>}
       </div>
     );
@@ -180,12 +188,12 @@ function Recent({ games, online, onReplay }: { games: GameSummary[]; online: MyO
   }
   rows.sort((a, b) => b.at - a.at);
   return (
-    <section className="set-card" data-testid="profile-recent">
-      <div className="card-head">
+    <section className="recent prof-recent" data-testid="profile-recent">
+      <div className="recent-head">
         <h3>Recent games</h3>
         {rows.length > 4 && <button className="link-btn" onClick={() => setAll((v) => !v)} data-testid="recent-link">{all ? 'Show less' : <>All {rows.length} <Icon name="chevron-right" size={14} /></>}</button>}
       </div>
-      {!rows.length && <p className="prof-note">No games yet — play a bot, a friend, or a Quick Match.</p>}
+      {!rows.length && <p className="prof-note">No games yet. Play a bot, a friend, or a quick match.</p>}
       {rows.slice(0, all ? 40 : 4).map((r) => (
         <button key={r.key} className="recent-item" onClick={r.open}>
           <span className={`ri-res ${r.res.cls}`}>{r.res.text}</span>

@@ -38,77 +38,70 @@ export function Home({ pieceSet, onStart, onOnline, onLearn, onReplay }: Props) 
     onStart({ mode: 'bot', botLevel: level, humanColor });
   };
 
+  const levelName = LEVELS.find((l) => l.id === level)!.name;
   return (
     <div className="home" data-testid="home">
-      <div className="hero">
-        <div className="hero-art">
-          <div className="hero-card hc1"><CardFace kind="3" size="md" /></div>
-          <div className="hero-card hc2"><CardFace kind="reverse" size="md" /></div>
-          <div className="hero-card hc3"><CardFace kind="skip" size="md" /></div>
-          <div className="hero-piece hp1"><Piece piece="K" set={pieceSet} /></div>
-          <div className="hero-piece hp2"><Piece piece="q" set={pieceSet} /></div>
-        </div>
-        <h1 className="logo">
-          <span className="logo-chess">Chess</span>
-          <span className="logo-uno">UNO</span>
-        </h1>
-        <p className="tagline">Draw a card. Make that many moves. Outwit the deck.</p>
-        <button className="link-btn how-link" onClick={() => setRules(true)} data-testid="how-to-play">How to play <Icon name="chevron-right" size={15} /></button>
-      </div>
+      <header className="home-top">
+        <h1 className="wordmark" aria-label="Chess Uno"><span>Chess</span><b>Uno</b></h1>
+        <p className="tagline">Draw a card. Make that many moves.</p>
+        <button className="link-btn how-link" onClick={() => setRules(true)} data-testid="how-to-play">How to play <Icon name="arrow-right" size={15} /></button>
+      </header>
 
-      <LearnCard progress={progress} onLearn={onLearn} />
-
-      <div className="modes">
-        <button className="mode-card mode-pass" onClick={() => onStart({ mode: 'pass', botLevel: 'medium', humanColor: 'w' })} data-testid="mode-pass">
-          <div className="mode-icon"><Icon name="arrow-up-down" size={26} /></div>
+      <section className="play-area mode-bot" aria-label="Play against the bot">
+        <div className="play-head">
           <div>
-            <h2>Pass &amp; Play</h2>
-            <p>Two players, one device, face to face. Works offline.</p>
+            <span className="eyebrow">Play now</span>
+            <h2 className="play-title">Vs bot</h2>
+            <p className="play-sub">The bot plans whole multi-move turns.</p>
           </div>
-        </button>
-
-        <div className="mode-card mode-bot">
-          <div className="mode-head">
-            <div className="mode-icon"><Icon name="bot" size={26} /></div>
-            <div>
-              <h2>Vs Bot</h2>
-              <p>The bot plans whole multi-move turns.</p>
-            </div>
+          <div className="play-cards" aria-hidden="true">
+            <CardFace kind="1" size="sm" className="pc1" />
+            <CardFace kind="2" size="sm" className="pc2" />
+            <CardFace kind="3" size="sm" className="pc3" />
           </div>
-          <div className="seg" role="radiogroup" aria-label="Difficulty">
-            {LEVELS.map((l) => (
-              <button key={l.id} role="radio" aria-checked={level === l.id} className={`seg-btn ${level === l.id ? 'on' : ''}`} onClick={() => setLevel(l.id)} data-testid={`level-${l.id}`}>
-                <span className="seg-piece"><Piece piece={l.piece} set={pieceSet} /></span>
-                <span><b>{l.name}</b><small>{l.blurb}</small></span>
-              </button>
-            ))}
-          </div>
-          <div className="seg seg-small" role="radiogroup" aria-label="Your side">
-            {(['w', 'random', 'b'] as const).map((s) => (
-              <button key={s} role="radio" aria-checked={side === s} className={`seg-btn ${side === s ? 'on' : ''}`} onClick={() => setSide(s)}>
-                {s === 'w' ? 'White' : s === 'b' ? 'Black' : 'Random'}
-              </button>
-            ))}
-          </div>
-          <button className="btn primary wide" onClick={startBot} data-testid="start-bot">Play vs {LEVELS.find((l) => l.id === level)!.name} Bot</button>
         </div>
+        <div className="field-label">Difficulty</div>
+        <div className="seg seg-levels" role="radiogroup" aria-label="Difficulty">
+          {LEVELS.map((l) => (
+            <button key={l.id} role="radio" aria-checked={level === l.id} className={`seg-btn ${level === l.id ? 'on' : ''}`} onClick={() => setLevel(l.id)} data-testid={`level-${l.id}`}>
+              <span className="seg-piece"><Piece piece={l.piece} set={pieceSet} /></span>
+              <span><b>{l.name}</b><small>{l.blurb}</small></span>
+            </button>
+          ))}
+        </div>
+        <div className="field-label">Your side</div>
+        <div className="seg seg-small" role="radiogroup" aria-label="Your side">
+          {(['w', 'random', 'b'] as const).map((s) => (
+            <button key={s} role="radio" aria-checked={side === s} className={`seg-btn ${side === s ? 'on' : ''}`} onClick={() => setSide(s)}>
+              {s === 'w' ? 'White' : s === 'b' ? 'Black' : 'Random'}
+            </button>
+          ))}
+        </div>
+        <button className="btn primary wide play-go" onClick={startBot} data-testid="start-bot">Play vs {levelName} Bot <Icon name="arrow-right" size={20} /></button>
+      </section>
 
-        <button className="mode-card mode-online" onClick={onOnline} data-testid="mode-online">
-          <div className="mode-icon"><Icon name="globe" size={26} /></div>
-          <div>
-            <h2>Online</h2>
-            <p>Quick Match or invite a friend by link or code.</p>
-          </div>
-        </button>
+      <div className="home-side">
+        <div className="rows" role="list">
+          <button className="row mode-pass" onClick={() => onStart({ mode: 'pass', botLevel: 'medium', humanColor: 'w' })} data-testid="mode-pass" role="listitem">
+            <span className="row-icon"><Icon name="arrow-up-down" size={20} /></span>
+            <span className="row-main"><b>Pass &amp; Play</b><small>Two players, one device. Works offline.</small></span>
+            <Icon name="chevron-right" size={18} className="chev" />
+          </button>
+          <button className="row mode-online" onClick={onOnline} data-testid="mode-online" role="listitem">
+            <span className="row-icon"><Icon name="globe" size={20} /></span>
+            <span className="row-main"><b>Online</b><small>Quick match, or invite a friend by code.</small></span>
+            <Icon name="chevron-right" size={18} className="chev" />
+          </button>
+          <LearnCard progress={progress} onLearn={onLearn} />
+        </div>
+        <RecentGames onOpen={onReplay} />
       </div>
-
-      <RecentGames onOpen={onReplay} />
 
       {rules && (
         <div className="overlay" onClick={() => setRules(false)}>
           <div className="panel rules" onClick={(e) => e.stopPropagation()}>
             <HowToPlay />
-            <button className="btn primary" onClick={() => setRules(false)}>Got it</button>
+            <button className="btn wide" onClick={() => setRules(false)}>Got it</button>
           </div>
         </div>
       )}
@@ -123,21 +116,22 @@ function LearnCard({ progress, onLearn }: { progress: ReturnType<typeof useProgr
   const st = streak(progress, localDay());
   const dailyDone = !!progress.daily[utcDay()];
   return (
-    <section className="learn-home" data-testid="learn-card">
-      <button className="learn-home-main" onClick={() => onLearn('path')} data-testid="open-learn">
-        <div className="learn-home-icon"><Icon name="graduation-cap" size={30} /></div>
-        <div className="learn-home-text">
-          <h2>Learn</h2>
-          <p>{next ? `${done ? 'Continue' : 'Start'}: ${lessonTitle(next)}` : 'Path complete — ranked unlocked!'}</p>
-          <div className="learn-home-meter"><div style={{ width: `${(done / total) * 100}%` }} /></div>
-          <small className="learn-home-stats"><span>{done}/{total} lessons</span><span><Icon name="zap" size={13} /> {progress.xp} XP</span><span><Icon name="flame" size={13} /> {st} day{st === 1 ? '' : 's'}</span></small>
-        </div>
+    <div className="learn-home" data-testid="learn-card">
+      <button className="row learn-home-main" onClick={() => onLearn('path')} data-testid="open-learn" role="listitem">
+        <span className="row-icon"><Icon name="graduation-cap" size={20} /></span>
+        <span className="row-main">
+          <b>Learn</b>
+          <small>{next ? `${done ? 'Next' : 'Start'}: ${lessonTitle(next)}` : 'Path complete. Ranked play unlocked.'}</small>
+          <span className="row-meter" aria-label={`${done} of ${total} lessons`}><i style={{ width: `${(done / total) * 100}%` }} /></span>
+        </span>
+        <span className="row-num"><b>{done}/{total}</b><small>{st}d streak</small></span>
+        <Icon name="chevron-right" size={18} className="chev" />
       </button>
-      <button className={`learn-home-daily ${dailyDone ? 'done' : ''}`} onClick={() => onLearn('daily')} data-testid="open-daily">
-        <span><Icon name={dailyDone ? 'check' : 'calendar'} size={28} /></span>
-        <b>Daily puzzle</b>
-        <small>{dailyDone ? 'Solved' : '+20 XP'}</small>
+      <button className={`row learn-home-daily ${dailyDone ? 'done' : ''}`} onClick={() => onLearn('daily')} data-testid="open-daily" role="listitem">
+        <span className="row-icon"><Icon name={dailyDone ? 'check' : 'calendar'} size={20} /></span>
+        <span className="row-main"><b>Daily puzzle</b><small>{dailyDone ? 'Solved today.' : 'One position a day. +20 XP.'}</small></span>
+        <Icon name="chevron-right" size={18} className="chev" />
       </button>
-    </section>
+    </div>
   );
 }

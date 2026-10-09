@@ -34,7 +34,7 @@ interface Props {
 export const LABEL_ICON: Record<Label, string | null> = {
   brilliant: '!!', great: '!', best: null, good: null, inaccuracy: '?!', mistake: '?', blunder: '??',
 };
-const labelMark = (l: Label) => LABEL_ICON[l] ?? <Icon name={l === 'best' ? 'star' : 'check'} size="1em" strokeWidth={2.6} />;
+const labelMark = (l: Label) => LABEL_ICON[l] ?? <Icon name={l === 'best' ? 'star' : 'check'} size="0.9em" strokeWidth={3} />;
 
 export default function ReplayScreen(props: Props) {
   const [record, setRecord] = useState<GameRecord | null>(null);
@@ -64,7 +64,7 @@ export default function ReplayScreen(props: Props) {
     return (
       <div className="replay replay-empty" data-testid="replay-error">
         <header className="game-bar"><button className="icon-btn" onClick={props.onClose} aria-label="Back"><Icon name="chevron-left" size={20} /></button><div className="game-bar-title">Replay</div></header>
-        <div className="replay-msg"><p>{error}</p><button className="btn primary" onClick={props.onClose}>Back</button></div>
+        <div className="replay-msg"><p>{error}</p><button className="btn" onClick={props.onClose}>Back</button></div>
       </div>
     );
   }
@@ -430,7 +430,7 @@ function frameText(f: Frame, names: [string, string]): { text: string; tone: str
   if (play && play.card.kind === 'skip') return { text: `SKIP! ${names[play.player]} goes again`, tone: 'skip' };
   if (skipped) return { text: `${names[skipped.player]}'s turn is skipped`, tone: 'skip' };
   const end = pick('turnEnd');
-  if (end?.reason === 'check') return { text: 'CHECK — turn over', tone: 'check' };
+  if (end?.reason === 'check') return { text: 'Check. Turn over.', tone: 'check' };
   const draws = ev.filter((e): e is Extract<GameEvent, { type: 'draw' }> => e.type === 'draw');
   if (draws.length) {
     const held = draws.filter((d) => d.toHand).map((d) => (d.card.kind === 'skip' ? 'a Skip' : 'a Reverse'));
@@ -534,7 +534,7 @@ function Coach({ turn, frame, line, review, progress, failed, names, onShowLine,
       <div className="coach coach-end" data-testid="coach-end">
         <div className="coach-head"><b>{r ? resultLine(r, names) : 'Game over'}</b></div>
         <p className="coach-text">
-          Accuracy — {names[0]} <b>{review.players[0].accuracy === null ? '—' : `${Math.round(review.players[0].accuracy)}%`}</b>, {names[1]} <b>{review.players[1].accuracy === null ? '—' : `${Math.round(review.players[1].accuracy)}%`}</b>.
+          Accuracy: {names[0]} <b>{review.players[0].accuracy === null ? '—' : `${Math.round(review.players[0].accuracy)}%`}</b>, {names[1]} <b>{review.players[1].accuracy === null ? '—' : `${Math.round(review.players[1].accuracy)}%`}</b>.
           {review.keyMoments.length > 0 && ` ${review.keyMoments.length} key moment${review.keyMoments.length === 1 ? '' : 's'} to look at.`}
         </p>
         {onOpenReview && <button className="btn ghost small" onClick={onOpenReview} data-testid="open-review">See the full review <Icon name="arrow-down" size={15} /></button>}
@@ -684,7 +684,7 @@ function LuckMeter({ review, names }: { review: GameReview; names: [string, stri
   const [a, b] = review.players;
   const diff = a.luck - b.luck; // positive: player 0 got the better cards
   const pos = 50 + Math.max(-45, Math.min(45, diff * 6));
-  const verdict = Math.abs(diff) < 1.5 ? 'The cards were even — this game was decided by play.' : `${diff > 0 ? names[0] : names[1]} drew the luckier cards (${Math.abs(diff).toFixed(1)}% swing per turn).`;
+  const verdict = Math.abs(diff) < 1.5 ? 'The cards were even. Play decided this game.' : `${diff > 0 ? names[0] : names[1]} drew the luckier cards (${Math.abs(diff).toFixed(1)}% swing per turn).`;
   return (
     <div className="luck-card" data-testid="luck-meter">
       <div className="eval-head"><b>Luck meter</b><span>cards drawn vs the deck average</span></div>
@@ -734,21 +734,25 @@ function KeyMoments({ review, names, onGo, onShowLine }: { review: GameReview; n
   );
 }
 
+/** Move-quality grid: one tile per verdict, the glyph in its colour, both players' counts side by side. */
 function LabelTable({ review, names }: { review: GameReview; names: [string, string] }) {
   const rows: Label[] = ['brilliant', 'great', 'best', 'good', 'inaccuracy', 'mistake', 'blunder'];
   return (
-    <table className="label-table" data-testid="label-table">
-      <thead><tr><th>{names[0]}</th><th /><th>{names[1]}</th></tr></thead>
-      <tbody>
-        {rows.map((l) => (
-          <tr key={l}>
-            <td>{review.players[0].counts[l]}</td>
-            <td><LabelPill label={l} /></td>
-            <td>{review.players[1].counts[l]}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
+    <div className="mq" data-testid="label-table">
+      <div className="mq-head"><b>Move quality</b><span><i>{names[0]}</i><i>{names[1]}</i></span></div>
+      <div className="mq-grid">
+        {rows.map((l) => {
+          const a = review.players[0].counts[l], b = review.players[1].counts[l];
+          return (
+            <div key={l} className={`mq-tile lbl-${l} ${a + b ? '' : 'none'}`}>
+              <span className="mq-glyph">{labelMark(l)}</span>
+              <span className="mq-name">{LABEL_TEXT[l]}</span>
+              <span className="mq-n"><b>{a}</b><b>{b}</b></span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
