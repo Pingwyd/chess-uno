@@ -10,7 +10,7 @@ export default defineConfig({
   server: { host: true },
   preview: { host: true },
   test: {
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'server/test/**/*.test.ts'],
     environment: 'node',
     testTimeout: 30000,
   },
