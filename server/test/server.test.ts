@@ -52,6 +52,31 @@ describe('accounts', () => {
   });
 });
 
+describe('learning progress sync', () => {
+  it('guests are told to sign up; accounts store and merge progress', async () => {
+    const s = await startApp(); app = s.app;
+    const g = await api(s.base, '/api/guest', {});
+    expect((await api(s.base, '/api/learn', undefined, g.json.token)).status).toBe(403);
+    expect((await api(s.base, '/api/learn', undefined)).status).toBe(401);
+    const up = await api(s.base, '/api/signup', { email: 'learner@example.com', password: 'correct horse' });
+    const t = up.json.token;
+    expect((await api(s.base, '/api/learn', undefined, t)).json.progress).toBeNull();
+    const deviceA = { v: 1, xp: 40, lessons: { b1: { stars: 2 } }, days: ['2026-10-08'], badges: { 'first-steps': '2026-10-08' }, updatedAt: 1 };
+    const saved = await api(s.base, '/api/learn', { progress: deviceA }, t);
+    expect(saved.status).toBe(200);
+    expect(saved.json.progress).toMatchObject({ xp: 40, lessons: { b1: { stars: 2 } } });
+    // A second device with different progress: nothing is lost, best stars win.
+    const deviceB = { v: 1, xp: 25, lessons: { b1: { stars: 3 }, b2: { stars: 1 } }, days: ['2026-10-09'], rankedUnlocked: false, updatedAt: 2, lessonsJunk: 1 };
+    const merged = await api(s.base, '/api/learn', { progress: deviceB }, t);
+    expect(merged.json.progress).toMatchObject({ xp: 40, lessons: { b1: { stars: 3 }, b2: { stars: 1 } }, days: ['2026-10-08', '2026-10-09'] });
+    expect((await api(s.base, '/api/learn', undefined, t)).json.progress.lessons.b2.stars).toBe(1);
+    // Garbage is sanitised, not stored verbatim.
+    const junk = await api(s.base, '/api/learn', { progress: { xp: 'lots', lessons: { '<x>': { stars: 9 } } } }, t);
+    expect(junk.status).toBe(200);
+    expect(junk.json.progress.lessons['<x>']).toBeUndefined();
+  });
+});
+
 describe('online game', () => {
   it('two clients play a full game over sockets (bot-driven) and it is persisted', async () => {
     const s = await startApp(); app = s.app;

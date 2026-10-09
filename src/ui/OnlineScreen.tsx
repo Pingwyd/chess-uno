@@ -4,6 +4,9 @@ import { normalizeCode, type PublicUser } from '../net/protocol';
 import { GameScreen, type OnlineBinding } from './GameScreen';
 import type { PieceSet } from './pieces';
 import type { BoardMode } from './BoardView';
+import { useProgress } from '../learn/store';
+import { OUTLINE_SHAPE as PATH_SHAPE } from '../learn/outline';
+import { pathOrder } from '../learn/progress';
 
 export type OnlineIntent = { kind: 'join' | 'watch'; code: string } | null;
 
@@ -122,6 +125,7 @@ function Lobby({ view, bootError, onHome }: { view: OnlineView; bootError: strin
           <section className="lobby-card">
             <h2>Quick Match</h2>
             <p>{user && !user.guest ? 'Rated · paired with a player near your rating' : 'Casual · guests are paired with other guests'}</p>
+            <RankedNote />
             {view.lobby.kind === 'queued' ? (
               <QueueStatus since={view.lobby.since} rated={view.lobby.rated} />
             ) : (
@@ -256,5 +260,17 @@ function AuthModal({ mode, onMode, onClose }: { mode: 'login' | 'signup'; onMode
         </div>
       </form>
     </div>
+  );
+}
+
+/** Learning-path ranked flag (client-side for now; not enforced by matchmaking yet). */
+function RankedNote() {
+  const p = useProgress();
+  const order = pathOrder(PATH_SHAPE);
+  const done = order.filter((id) => p.lessons[id]).length;
+  return (
+    <p className={`ranked-note ${p.rankedUnlocked ? 'on' : ''}`} data-testid="ranked-note">
+      {p.rankedUnlocked ? '🎓 Ranked unlocked — learning path complete' : `📘 Learning path ${done}/${order.length} — finish it to unlock ranked`}
+    </p>
   );
 }

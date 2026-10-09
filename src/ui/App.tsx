@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Home } from './Home';
 import { GameScreen } from './GameScreen';
 import { OnlineScreen, type OnlineIntent } from './OnlineScreen';
@@ -7,6 +7,12 @@ import { PieceDefs, type PieceSet } from './pieces';
 import { setSoundEnabled } from './sound';
 import { has3D, preload3D, type BoardMode } from './BoardView';
 import type { GameSetup } from './useGame';
+import type { LearnTab } from './learn/LearnScreen';
+import { useProgress } from '../learn/store';
+import { setActiveSkins } from './skins';
+
+// The learning path (lessons, puzzles, path map) is its own chunk, loaded on first visit.
+const LearnScreen = lazy(() => import('./learn/LearnScreen'));
 
 const load = <T,>(k: string, d: T): T => {
   try {
@@ -45,6 +51,9 @@ const clearUrlIntent = () => {
 export function App() {
   const [setup, setSetup] = useState<GameSetup | null>(null);
   const [online, setOnline] = useState<boolean>(!!urlIntent);
+  const [learn, setLearn] = useState<LearnTab | null>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).has('learn') ? 'path' : null));
+  const progress = useProgress();
+  setActiveSkins(progress.skins);
   useEffect(clearUrlIntent, []);
   const [pieceSet, setPieceSet] = useState<PieceSet>(() => load('cu.pieceSet', 'arcane'));
   const [sound, setSound] = useState<boolean>(() => load('cu.sound', true));
@@ -56,10 +65,21 @@ export function App() {
   useEffect(() => { localStorage.setItem('cu.sound', JSON.stringify(sound)); setSoundEnabled(sound); }, [sound]);
 
   return (
-    <div className="app">
+    <div className={`app skin-w-${progress.skins.w} skin-b-${progress.skins.b}`}>
       <PieceDefs />
       <div className="bg-sparks" aria-hidden="true" />
-      {online ? (
+      {learn ? (
+        <Suspense fallback={<div className="learn-loading">Opening the path…</div>}>
+          <LearnScreen
+            initialTab={learn}
+            pieceSet={pieceSet}
+            boardMode={boardMode}
+            onToggleBoard={toggleBoard}
+            onBoardUnavailable={() => setBoardMode('2d')}
+            onHome={() => setLearn(null)}
+          />
+        </Suspense>
+      ) : online ? (
         <OnlineScreen
           pieceSet={pieceSet}
           boardMode={boardMode}
@@ -78,7 +98,7 @@ export function App() {
           onHome={() => setSetup(null)}
         />
       ) : (
-        <Home pieceSet={pieceSet} sound={sound} boardMode={boardMode} onBoardMode={setBoardMode} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} />
+        <Home pieceSet={pieceSet} sound={sound} boardMode={boardMode} onBoardMode={setBoardMode} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} onLearn={(t) => setLearn(t)} />
       )}
     </div>
   );
