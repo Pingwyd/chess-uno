@@ -649,7 +649,7 @@ function TrySandbox({ turn, frames, turnNo, pieceSet, boardMode, onToggleBoard, 
       setup={{ mode: 'bot', botLevel: level, humanColor: start.colorOf[turn.player] }}
       pieceSet={pieceSet} boardMode={boardMode} onToggleBoard={onToggleBoard} onTogglePieces={onTogglePieces}
       onHome={onBack}
-      sandbox={{ transport, subtitle: `From turn ${turnNo}${turn.card ? ` · same ${turn.card}-card` : ''} · you play ${start.colorOf[turn.player] === 'w' ? 'White' : 'Black'}`, onBack }}
+      sandbox={{ transport, subtitle: `Turn ${turnNo}${turn.card ? ` · ${turn.card}-card` : ''} · ${start.colorOf[turn.player] === 'w' ? 'White' : 'Black'} vs ${BOT_NAMES[level]}`, onBack }}
     />
   );
 }

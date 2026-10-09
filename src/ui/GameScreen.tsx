@@ -283,7 +283,7 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
               <button className="icon-btn" onClick={online ? online.onLeave : onHome} aria-label={online ? 'Back to lobby' : 'Home'}><Icon name={online ? 'chevron-left' : 'house'} size={20} /></button>
             )}
             <div className="game-bar-title">
-              {sandbox ? <span className="sandbox-title"><span>Try it yourself <i>vs {BOT_NAMES[setup.botLevel]}</i></span><small>{sandbox.subtitle}</small></span> : online
+              {sandbox ? <span className="sandbox-title"><span>Try it yourself</span><small>{sandbox.subtitle}</small></span> : online
                 ? spectator
                   ? <>Watching <span className="mono">{online.snap.code}</span></>
                   : <>Vs {state.players[top].name}{online.snap.rated && <span className="rated-tag">Rated</span>}</>
@@ -574,8 +574,8 @@ function SandboxTools({ sandbox }: { sandbox: SandboxBinding }) {
   const t = sandbox.transport;
   return (
     <div className="sandbox-tools" role="toolbar" aria-label="Sandbox">
-      <button className="btn small" onClick={() => t.undo()} disabled={!t.canUndo()} data-testid="sandbox-undo"><Icon name="undo" size={16} /> Undo</button>
-      <button className="btn small" onClick={() => t.reset()} data-testid="sandbox-reset"><Icon name="rotate-ccw" size={16} /> Reset</button>
+      <button className="btn small" onClick={() => t.undo()} disabled={!t.canUndo()} data-testid="sandbox-undo"><Icon name="undo" size={16} /><span className="st-label">Undo</span></button>
+      <button className="btn small" onClick={() => t.reset()} data-testid="sandbox-reset"><Icon name="rotate-ccw" size={16} /><span className="st-label">Reset</span></button>
     </div>
   );
 }
