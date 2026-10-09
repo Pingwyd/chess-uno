@@ -16,7 +16,7 @@ interface Props extends Omit<PrefsProps, 'onAuth' | 'onHowTo'> {
   initialTab: SettingsTab;
   onHome: () => void;
   onReplay: OpenReplay;
-  onLearn: () => void;
+  onLearn: (lesson?: string) => void;
 }
 
 /** Profile, Badges & skins and Settings (reached from Profile / Settings in the app nav). */

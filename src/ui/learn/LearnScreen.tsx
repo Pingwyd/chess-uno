@@ -16,6 +16,8 @@ export type LearnTab = 'path' | 'daily' | 'badges';
 
 interface Props extends BoardEnv {
   initialTab?: LearnTab;
+  /** Open straight into this lesson (when it is unlocked), e.g. from a locked skin's "Go to lesson". */
+  startLesson?: string;
   onHome: () => void;
   /** A lesson or puzzle is open (the app hides its navigation). */
   onPlaying?: (playing: boolean) => void;
@@ -25,11 +27,14 @@ const UNIT_BADGE: Record<string, string> = { basics: 'board-ready', cards: 'card
 const SYNC_TEXT: Record<string, string> = { synced: 'Synced to your account', offline: 'Offline — saved on this device', local: 'Saved on this device (sign up to sync)' };
 const WIGGLE = [0, 56, 84, 56, 0, -56, -84, -56];
 
-export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ...env }: Props) {
+export default function LearnScreen({ initialTab = 'path', startLesson, onHome, onPlaying, ...env }: Props) {
   const progress = useProgress();
   const sync = useSyncState();
   const [tab, setTab] = useState<LearnTab>(initialTab);
-  const [playing, setPlaying] = useState<{ lesson: Lesson; mode: PlayMode } | null>(null);
+  const [playing, setPlaying] = useState<{ lesson: Lesson; mode: PlayMode } | null>(() => {
+    const l = startLesson ? lessonById(startLesson) : undefined;
+    return l && isUnlocked(getProgress(), PATH_SHAPE, l.id) ? { lesson: l, mode: 'lesson' } : null;
+  });
   useEffect(() => { void pullProgress(); }, []);
   useEffect(() => { onPlaying?.(!!playing); }, [playing, onPlaying]);
   useEffect(() => () => onPlaying?.(false), [onPlaying]);

@@ -57,6 +57,7 @@ describe('learning content', () => {
   it('keeps the lightweight outline in sync with the content', () => {
     expect(OUTLINE_SHAPE).toEqual(PATH_SHAPE);
     expect(PATH_OUTLINE.flatMap((u) => u.lessons.map(([, title]) => title))).toEqual(LESSONS.map((l) => l.title));
+    expect(PATH_OUTLINE.map((u) => u.title)).toEqual(UNITS.map((u) => u.title));
   });
 
   it.each(puzzles.map((p) => [p.puzzle.id, p.puzzle] as const))('puzzle %s: the authored solution meets every goal', (_id, p) => {
@@ -240,5 +241,18 @@ describe('rules v2 lesson demo', () => {
     expect(afterDraw.events.some((e) => e.type === 'burnCard')).toBe(true);
     expect(afterDraw.movesAllowed).toBe(2);
     expect(frames).toHaveLength(4);
+  });
+});
+
+describe('badge goals (locked skin requirements)', () => {
+  it('reports unit, path and streak progress with the next lesson', async () => {
+    const { badgeGoal, emptyProgress } = await import('../src/learn/progress');
+    const { OUTLINE_SHAPE } = await import('../src/learn/outline');
+    const base = emptyProgress();
+    const p = { ...base, lessons: { b1: { stars: 3 as const }, c1: { stars: 2 as const }, c2: { stars: 3 as const }, c3: { stars: 1 as const } } };
+    expect(badgeGoal(p, 'card-shark', OUTLINE_SHAPE, '2026-10-09')).toMatchObject({ kind: 'unit', unit: 'cards', n: 3, total: 5, lesson: 'c4' });
+    expect(badgeGoal(p, 'graduate', OUTLINE_SHAPE, '2026-10-09')).toMatchObject({ kind: 'path', n: 4, total: 24, lesson: 'b2' });
+    const streaky = { ...base, days: ['2026-10-07', '2026-10-08', '2026-10-09'] };
+    expect(badgeGoal(streaky, 'unstoppable', OUTLINE_SHAPE, '2026-10-09')).toMatchObject({ kind: 'streak', n: 3, total: 7 });
   });
 });
