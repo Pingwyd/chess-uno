@@ -4,6 +4,7 @@ import type { CardKind } from '../../rules/cards';
 import { CardFace } from '../Card';
 import type { PieceSet } from '../pieces';
 import type { BoardMode } from '../BoardView';
+import { Icon } from '../icons';
 
 export interface BoardEnv {
   pieceSet: PieceSet;
@@ -33,7 +34,7 @@ export function Stars({ n, size = 'md', animate = false }: { n: number; size?: '
   return (
     <span className={`stars stars-${size} ${animate ? 'stars-anim' : ''}`} aria-label={`${n} of 3 stars`}>
       {[1, 2, 3].map((i) => (
-        <span key={i} className={`star ${i <= n ? 'on' : ''}`} style={{ animationDelay: `${0.25 + i * 0.28}s` }}>★</span>
+        <span key={i} className={`star ${i <= n ? 'on' : ''}`} style={{ animationDelay: `${0.25 + i * 0.28}s` }}><Icon name="star" size="1em" className="star-svg" /></span>
       ))}
     </span>
   );

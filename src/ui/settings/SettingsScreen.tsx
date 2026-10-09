@@ -10,6 +10,7 @@ import { ProfileTab } from './ProfileTab';
 import { CollectionTab } from './CollectionTab';
 import { useSettings } from './store';
 import '../social/social.css';
+import { Icon } from '../icons';
 
 export type SettingsTab = 'profile' | 'collection' | 'settings';
 
@@ -20,7 +21,7 @@ interface Props extends Omit<PrefsProps, 'onAuth' | 'onHowTo'> {
   onLearn: () => void;
 }
 
-/** Profile, Badges & skins and Settings (reached from Profile / ⚙ in the app nav). */
+/** Profile, Badges & skins and Settings (reached from Profile / Settings in the app nav). */
 const TITLES: Record<SettingsTab, string> = { profile: 'Profile', collection: 'Badges & skins', settings: 'Settings' };
 
 export function SettingsScreen({ initialTab, onHome, onReplay, onLearn, ...prefs }: Props) {
@@ -38,14 +39,14 @@ export function SettingsScreen({ initialTab, onHome, onReplay, onLearn, ...prefs
 
   const tabs: { id: SettingsTab; label: string; icon: React.ReactNode }[] = [
     { id: 'profile', label: 'Profile', icon: <Avatar name={view.user?.name ?? 'You'} avatar={view.user?.avatar ?? settings.avatar} size={22} /> },
-    { id: 'collection', label: 'Collection', icon: <span>🏅</span> },
-    { id: 'settings', label: 'Settings', icon: <span>⚙</span> },
+    { id: 'collection', label: 'Collection', icon: <Icon name="award" size={17} /> },
+    { id: 'settings', label: 'Settings', icon: <Icon name="settings" size={17} /> },
   ];
 
   return (
     <div className="lobby settings-screen" data-testid="settings">
       <header className="lobby-bar">
-        <button className="icon-btn" onClick={onHome} aria-label="Home" data-testid="settings-home">⌂</button>
+        <button className="icon-btn" onClick={onHome} aria-label="Home" data-testid="settings-home"><Icon name="house" size={20} /></button>
         <h1>{TITLES[tab]}</h1>
       </header>
       <nav className="set-tabs" role="tablist">

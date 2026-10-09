@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameSummary } from '../replay/record';
 import { deleteGame, useRecentGames } from '../replay/store';
+import { Icon } from './icons';
 
 export type OpenReplay = (src: { id: string } | { gameId: string }, tab?: 'replay' | 'review') => void;
 
@@ -44,7 +45,7 @@ function Item({ g, onOpen }: { g: GameSummary; onOpen: OpenReplay }) {
     <button className="recent-item" onClick={() => onOpen({ id: g.id })} data-testid="recent-item">
       <span className={`ri-res ${o.cls}`}>{o.text}</span>
       <span className="ri-main"><b>{title(g)}</b><small>{sub(g)}</small></span>
-      <span className="ri-go">Review ›</span>
+      <span className="ri-go">Review <Icon name="chevron-right" size={15} /></span>
     </button>
   );
 }
@@ -58,7 +59,7 @@ export function RecentGames({ onOpen }: { onOpen: OpenReplay }) {
     <section className="recent-card recent" data-testid="recent-games">
       <div className="recent-head">
         <h3>Recent games</h3>
-        {games.length > 3 && <button className="btn ghost tiny" onClick={() => setAll(true)} data-testid="recent-all">All {games.length} ›</button>}
+        {games.length > 3 && <button className="btn ghost tiny" onClick={() => setAll(true)} data-testid="recent-all">All {games.length} <Icon name="chevron-right" size={15} /></button>}
       </div>
       {games.slice(0, 3).map((g) => <Item key={g.id} g={g} onOpen={onOpen} />)}
       {all && (
@@ -70,7 +71,7 @@ export function RecentGames({ onOpen }: { onOpen: OpenReplay }) {
               {games.map((g) => (
                 <div className="recent-row" key={g.id}>
                   <Item g={g} onOpen={onOpen} />
-                  <button className="recent-del" aria-label="Delete game" title="Delete" onClick={() => void deleteGame(g.id)}>✕</button>
+                  <button className="recent-del" aria-label="Delete game" title="Delete" onClick={() => void deleteGame(g.id)}><Icon name="x" size={16} /></button>
                 </div>
               ))}
             </div>

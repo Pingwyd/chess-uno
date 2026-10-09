@@ -7,7 +7,7 @@ import { sql } from 'kysely';
 import type { Database, UsersTable } from './db';
 import { AuthError, NAME_RE, toPublicUser } from './auth';
 import { START_RATING } from './rating';
-import { isAvatar, type FriendInfo, type FriendsList, type ProfileInfo, type RatingPoint, type Relation, type UserSearchHit } from '../../src/net/protocol';
+import { isAvatar, normalizeAvatar, type FriendInfo, type FriendsList, type ProfileInfo, type RatingPoint, type Relation, type UserSearchHit } from '../../src/net/protocol';
 
 export const MAX_FRIENDS = 200;
 const pair = (x: string, y: string): [string, string] => (x < y ? [x, y] : [y, x]);
@@ -15,7 +15,7 @@ const nowIso = () => new Date().toISOString();
 const ms = (iso: string | null) => (iso ? new Date(iso as never).getTime() : 0);
 
 export const friendInfo = (u: UsersTable): FriendInfo => ({
-  id: u.id, name: u.name, avatar: u.avatar ?? null, rating: u.rating, ratedGames: u.rated_games,
+  id: u.id, name: u.name, avatar: normalizeAvatar(u.avatar), rating: u.rating, ratedGames: u.rated_games,
 });
 
 /** Social features need a real account (guests are prompted to sign up). */

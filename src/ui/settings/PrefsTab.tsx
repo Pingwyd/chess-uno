@@ -6,6 +6,7 @@ import { previewSfx } from '../sound';
 import { client, useOnline } from '../social/useOnline';
 import { setSettings, useSettings, type MotionPref, type Settings } from './store';
 import { RULES_VERSION } from '../../rules/cards';
+import { Icon } from '../icons';
 
 export interface PrefsProps {
   pieceSet: PieceSet;
@@ -68,8 +69,16 @@ export function PrefsTab(p: PrefsProps) {
             <button className={`seg-btn ${p.pieceSet === 'classic' ? 'on' : ''}`} onClick={() => p.onPieceSet('classic')}>Classic</button>
           </div>
         </div>
+        <div className="set-row">
+          <span className="set-label"><b>3D graphics</b><small>{s.graphics === 'auto' ? 'Trims effects on slower devices, keeps the board sharp' : s.graphics === 'high' ? 'All effects, always' : 'Effects off for battery and older phones'}</small></span>
+          <div className="seg seg-small mini-seg">
+            {(['auto', 'high', 'low'] as const).map((g) => (
+              <button key={g} className={`seg-btn ${s.graphics === g ? 'on' : ''}`} onClick={() => setSettings({ graphics: g })} data-testid={`set-graphics-${g}`}>{g === 'auto' ? 'Auto' : g === 'high' ? 'High' : 'Low'}</button>
+            ))}
+          </div>
+        </div>
         <Toggle label="Legal-move hints" sub="Dots and rings where the selected piece can go" on={s.hints} onChange={(v) => setSettings({ hints: v })} testid="set-hints" />
-        <Toggle label="Confirm moves" sub="Tap a move, then press Play ✓ — no mis-taps" on={s.confirmMoves} onChange={(v) => setSettings({ confirmMoves: v })} testid="set-confirm" />
+        <Toggle label="Confirm moves" sub="Tap a move, then press Play — no mis-taps" on={s.confirmMoves} onChange={(v) => setSettings({ confirmMoves: v })} testid="set-confirm" />
       </section>
 
       <section className="set-card" data-testid="set-sound">
@@ -104,8 +113,8 @@ export function PrefsTab(p: PrefsProps) {
 
       <section className="set-card" data-testid="set-about">
         <h3>About</h3>
-        <button className="set-link" onClick={p.onHowTo} data-testid="set-howto"><span>📖 How to play</span><i>›</i></button>
-        <a className="set-link" href="https://github.com/Pingwyd/chess-uno" target="_blank" rel="noreferrer"><span>💻 Source code</span><i>↗</i></a>
+        <button className="set-link" onClick={p.onHowTo} data-testid="set-howto"><span><Icon name="book" size={17} /> How to play</span><i><Icon name="chevron-right" size={18} /></i></button>
+        <a className="set-link" href="https://github.com/Pingwyd/chess-uno" target="_blank" rel="noreferrer"><span><Icon name="code" size={17} /> Source code</span><i><Icon name="external" size={16} /></i></a>
         <p className="prof-note about-line">Chess UNO 0.1 · rules v{RULES_VERSION} · {HAS_SERVER ? 'online server connected' : 'offline build'}</p>
       </section>
     </div>
@@ -140,9 +149,9 @@ function AccountSection({ onAuth }: { onAuth: (m: 'login' | 'signup') => void })
         <>
           <div className="set-row"><span className="set-label"><b>{u.name}</b><small>{u.email}</small></span>
             <button className="btn ghost small" onClick={() => void client.logout()} data-testid="set-logout">Sign out</button></div>
-          <button className="set-link" onClick={() => setPw((v) => !v)} data-testid="set-password"><span>🔑 Change password</span><i>{pw ? '⌃' : '›'}</i></button>
+          <button className="set-link" onClick={() => setPw((v) => !v)} data-testid="set-password"><span><Icon name="key" size={17} /> Change password</span><i><Icon name={pw ? 'chevron-up' : 'chevron-right'} size={18} /></i></button>
           {pw && <PasswordForm onDone={() => setPw(false)} />}
-          <button className="set-link danger" onClick={() => setDel(true)} data-testid="set-delete"><span>🗑 Delete account</span><i>›</i></button>
+          <button className="set-link danger" onClick={() => setDel(true)} data-testid="set-delete"><span><Icon name="trash" size={17} /> Delete account</span><i><Icon name="chevron-right" size={18} /></i></button>
           {del && <DeleteDialog name={u.name} onClose={() => setDel(false)} />}
         </>
       )}

@@ -9,7 +9,7 @@ export const unit1: Unit = {
   color: '#ffb347',
   lessons: [
     {
-      id: 'b1', title: 'Rooks, bishops & queens', icon: '♜', minutes: 2,
+      id: 'b1', title: 'Rooks, bishops & queens', icon: 'rook', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Straight lines and diagonals',
@@ -42,7 +42,7 @@ export const unit1: Unit = {
       ],
     },
     {
-      id: 'b2', title: 'Knights & pawns', icon: '♞', minutes: 2,
+      id: 'b2', title: 'Knights & pawns', icon: 'knight', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Jumps and marches',
@@ -75,7 +75,7 @@ export const unit1: Unit = {
       ],
     },
     {
-      id: 'b3', title: 'Check', icon: '♚', minutes: 2,
+      id: 'b3', title: 'Check', icon: 'king', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'The king is under attack',
@@ -102,7 +102,7 @@ export const unit1: Unit = {
       ],
     },
     {
-      id: 'b4', title: 'Checkmate', icon: '♛', minutes: 3,
+      id: 'b4', title: 'Checkmate', icon: 'queen', minutes: 3,
       steps: [
         {
           kind: 'explain', title: 'No way out',
@@ -135,7 +135,7 @@ export const unit1: Unit = {
       ],
     },
     {
-      id: 'b5', title: 'Castling & promotion', icon: '♖', minutes: 2,
+      id: 'b5', title: 'Castling & promotion', icon: 'castle', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Two special moves',
@@ -162,7 +162,7 @@ export const unit1: Unit = {
       ],
     },
     {
-      id: 'b6', title: 'En passant', icon: '♟', minutes: 2,
+      id: 'b6', title: 'En passant', icon: 'pawn', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Capturing in passing',
@@ -184,7 +184,7 @@ export const unit1: Unit = {
     },
   ],
   placement: {
-    id: 'b-test', title: 'Placement check', icon: '⤼', minutes: 2,
+    id: 'b-test', title: 'Placement check', icon: 'skip-forward', minutes: 2,
     steps: [
       { kind: 'puzzle', puzzle: {
         id: 'bt-mate', prompt: 'Checkmate in one.',

@@ -6,15 +6,17 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { OrbitControls, PerformanceMonitor, Sparkles } from '@react-three/drei';
-import { BloomEffect, EffectComposer, EffectPass, RenderPass, VignetteEffect } from 'postprocessing';
+import { BloomEffect, EffectComposer, EffectPass, RenderPass, SMAAEffect, ToneMappingEffect, ToneMappingMode, VignetteEffect, type Effect } from 'postprocessing';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { colorOfPiece, typeOf, type Color } from '../../rules/chess';
 import type { BoardArrow, BoardProps } from '../Board';
 import { useBoardInteraction } from '../useBoardInteraction';
-import { useReducedMotion } from '../settings/store';
+import { useReducedMotion, useSettings } from '../settings/store';
+import { LOW_LEVEL, QualityGovernor, qualityFor, type Quality } from './quality';
 import { cameraPreset, homeAzimuth, pieceYaw, squareToWorld, trackPieces, type CameraPreset, type TrackedPiece } from './mapping';
 import { PIECE_HEIGHT, pieceGeometry, type Set3D } from './pieceGeometry';
 import { pieceMaterials } from './materials';
+import { Icon } from '../icons';
 
 type Interaction = ReturnType<typeof useBoardInteraction>;
 
@@ -28,63 +30,79 @@ export default function Board3D(props: BoardProps) {
   const ia = useBoardInteraction(state, interactive, onMove, onPromotion);
   const reduced = useReducedMotion();
   const [resetKey, setResetKey] = useState(0);
-  const [hq, setHq] = useState(true);
-  const [dpr, setDpr] = useState(() => Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 1.75));
+  const graphics = useSettings().graphics;
+  const deviceDpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
+  // Auto mode: a governor with hysteresis walks the quality ladder (effects first, DPR last).
+  const governor = useRef(new QualityGovernor());
+  const [autoLevel, setAutoLevel] = useState(0);
+  useEffect(() => { governor.current = new QualityGovernor(); setAutoLevel(0); }, [graphics]);
+  const q = qualityFor(graphics === 'high' ? 0 : graphics === 'low' ? LOW_LEVEL : autoLevel, deviceDpr);
+  const step = (dir: 'decline' | 'incline') => { const g = governor.current; if (g[dir](performance.now())) setAutoLevel(g.level); };
   const set: Set3D = pieceSet === 'classic' ? 'classic' : 'arcane';
 
   return (
     <div className={`board3d ${interactive ? 'board3d-live' : ''}`} data-testid="board-3d">
       <Canvas
         shadows="percentage"
-        dpr={dpr}
+        dpr={q.dpr}
         camera={{ fov: 36, near: 0.1, far: 90, position: [0, 9, 9] }}
         gl={{ antialias: true, powerPreference: 'high-performance' }}
         onCreated={({ gl }) => { gl.toneMappingExposure = 1.05; }}
       >
-        <PerformanceMonitor onDecline={() => { setDpr(1); setHq(false); }} flipflops={2} />
+        {graphics === 'auto' && <PerformanceMonitor onDecline={() => step('decline')} onIncline={() => step('incline')} />}
         <color attach="background" args={['#0b0918']} />
         <fog attach="fog" args={['#0b0918', 18, 38]} />
-        <Lights hq={hq} home={homeAzimuth(bottomColor)} />
-        <StudioEnvironment />
+        <Lights shadowMap={q.shadowMap} home={homeAzimuth(bottomColor)} />
+        {q.reflections && <StudioEnvironment />}
         <CameraRig home={homeAzimuth(bottomColor)} mode={faceTopPieces ? 'pass' : 'play'} resetKey={resetKey} reduced={reduced} />
         <BoardMesh bottomColor={bottomColor} ia={ia} />
         <Highlights state={state} ia={ia} />
-        <Pieces state={state} set={set} bottomColor={bottomColor} faceTop={faceTopPieces} anim={anim} ia={ia} reduced={reduced} />
+        <Pieces state={state} set={set} bottomColor={bottomColor} faceTop={faceTopPieces} anim={anim} ia={ia} reduced={reduced} contact={q.shadowMap === 0} />
         <Badges state={state} ia={ia} />
         {props.arrows && props.arrows.length > 0 && <Arrows3D arrows={props.arrows} />}
-        {!reduced && (
+        {!reduced && q.particles && (
           <>
             <Sparkles count={36} scale={[13, 3.5, 13]} position={[0, 1.6, 0]} size={2.2} speed={0.25} opacity={0.55} color="#ffc27a" />
             <Sparkles count={30} scale={[13, 3.5, 13]} position={[0, 1.6, 0]} size={2} speed={0.2} opacity={0.5} color="#5ff2e6" />
           </>
         )}
-        {hq && <PostFX />}
-        <TestHook ia={ia} />
+        {q.bloom > 0 && <PostFX bloom={q.bloom} />}
+        <TestHook ia={ia} quality={q} />
       </Canvas>
-      <button className="icon-btn board3d-reset" onClick={() => setResetKey((k) => k + 1)} aria-label="Reset camera" title="Reset camera" data-testid="reset-camera">⟲</button>
+      <button className="icon-btn board3d-reset" onClick={() => setResetKey((k) => k + 1)} aria-label="Reset camera" title="Reset camera" data-testid="reset-camera"><Icon name="rotate-ccw" size={18} /></button>
     </div>
   );
 }
 
 // ------------------------------------------------------------ post-processing
 
-/** Bloom (only HDR emissives — eyes, gems, glows — cross the threshold) plus a soft vignette. */
-function PostFX() {
+/**
+ * Bloom (only HDR emissives — eyes, gems, glows — cross the threshold) plus a soft vignette.
+ * The scene pass is multisampled (MSAA) so edges stay as clean as the plain renderer's; GPUs
+ * without multisampled render targets get SMAA instead. Buffers follow the canvas DPR, so a
+ * DPR change never leaves a low-res composer being stretched over a sharp canvas.
+ */
+function PostFX({ bloom }: { bloom: number }) {
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
   const size = useThree((s) => s.size);
+  const dpr = useThree((s) => s.viewport.dpr);
   const composer = useMemo(() => {
-    const c = new EffectComposer(gl, { frameBufferType: THREE.HalfFloatType, multisampling: Math.min(4, gl.capabilities.maxSamples) });
+    const samples = Math.min(4, gl.capabilities.maxSamples);
+    const c = new EffectComposer(gl, { frameBufferType: THREE.HalfFloatType, multisampling: samples });
     c.addPass(new RenderPass(scene, camera));
-    c.addPass(new EffectPass(
-      camera,
-      new BloomEffect({ mipmapBlur: true, intensity: 0.75, luminanceThreshold: 0.9, luminanceSmoothing: 0.2, radius: 0.7 }),
+    const effects: Effect[] = [
+      new BloomEffect({ mipmapBlur: true, intensity: 0.75, luminanceThreshold: 0.9, luminanceSmoothing: 0.2, radius: 0.7, resolutionScale: bloom }),
+      // Same ACES curve the plain renderer uses, so switching the composer on/off doesn't shift colours.
+      new ToneMappingEffect({ mode: ToneMappingMode.ACES_FILMIC }),
       new VignetteEffect({ offset: 0.32, darkness: 0.55 }),
-    ));
+    ];
+    if (samples < 2) effects.push(new SMAAEffect());
+    c.addPass(new EffectPass(camera, ...effects));
     return c;
-  }, [gl, scene, camera]);
-  useEffect(() => { composer.setSize(size.width, size.height); }, [composer, size.width, size.height]);
+  }, [gl, scene, camera, bloom]);
+  useEffect(() => { composer.setSize(size.width, size.height); }, [composer, size.width, size.height, dpr]);
   useEffect(() => () => composer.dispose(), [composer]);
   // Priority 1 takes over rendering from react-three-fiber while mounted.
   useFrame((_, dt) => composer.render(dt), 1);
@@ -123,7 +141,7 @@ function StudioEnvironment() {
 }
 
 /** Key light stays behind the viewer's shoulder, so the near army's faces are lit after a Reverse too. */
-function Lights({ hq, home }: { hq: boolean; home: number }) {
+function Lights({ shadowMap, home }: { shadowMap: number; home: number }) {
   const group = useRef<THREE.Group>(null);
   useFrame((_, dt) => {
     const g = group.current;
@@ -139,8 +157,8 @@ function Lights({ hq, home }: { hq: boolean; home: number }) {
         position={[5, 11, 7]}
         intensity={2.4}
         color="#ffe6c2"
-        castShadow
-        shadow-mapSize={hq ? [2048, 2048] : [1024, 1024]}
+        castShadow={shadowMap > 0}
+        shadow-mapSize={[shadowMap || 1024, shadowMap || 1024]}
         shadow-camera-left={-6.5}
         shadow-camera-right={6.5}
         shadow-camera-top={6.5}
@@ -266,8 +284,9 @@ const SQ_GEO = new THREE.BoxGeometry(0.985, 0.08, 0.985);
 
 function labelTexture(text: string) {
   const c = document.createElement('canvas');
-  c.width = c.height = 64;
+  c.width = c.height = 128; // 2x so the coordinates stay sharp on high-DPI screens
   const g = c.getContext('2d')!;
+  g.scale(2, 2);
   g.fillStyle = '#f0d9a2';
   g.font = '700 42px Cinzel, Georgia, serif';
   g.textAlign = 'center';
@@ -275,7 +294,7 @@ function labelTexture(text: string) {
   g.fillText(text, 32, 35);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8; // clamped to the GPU maximum by three
   return t;
 }
 
@@ -443,8 +462,9 @@ function badgeTexture(n: number, color: Color) {
   const hit = badgeTextures.get(key);
   if (hit) return hit;
   const c = document.createElement('canvas');
-  c.width = c.height = 96;
+  c.width = c.height = 192;
   const g = c.getContext('2d')!;
+  g.scale(2, 2);
   const grad = g.createLinearGradient(0, 8, 0, 88);
   if (color === 'w') { grad.addColorStop(0, '#ffe08a'); grad.addColorStop(1, '#ff9a1f'); } else { grad.addColorStop(0, '#8ffff0'); grad.addColorStop(1, '#1fa8b5'); }
   g.shadowColor = 'rgba(0,0,0,0.55)';
@@ -497,8 +517,9 @@ function arrowLabelTexture(text: string, tone: BoardArrow['tone']) {
   const hit = labelTextures.get(key);
   if (hit) return hit;
   const c = document.createElement('canvas');
-  c.width = c.height = 96;
+  c.width = c.height = 192;
   const g = c.getContext('2d')!;
+  g.scale(2, 2);
   g.beginPath();
   g.arc(48, 48, 38, 0, Math.PI * 2);
   g.fillStyle = ARROW_COLOR[tone];
@@ -552,8 +573,8 @@ function Arrows3D({ arrows }: { arrows: BoardArrow[] }) {
 
 // ------------------------------------------------------------ pieces
 
-function Pieces({ state, set, bottomColor, faceTop, anim, ia, reduced }: {
-  state: BoardProps['state']; set: Set3D; bottomColor: Color; faceTop: boolean; anim: BoardProps['anim']; ia: Interaction; reduced: boolean;
+function Pieces({ state, set, bottomColor, faceTop, anim, ia, reduced, contact }: {
+  state: BoardProps['state']; set: Set3D; bottomColor: Color; faceTop: boolean; anim: BoardProps['anim']; ia: Interaction; reduced: boolean; contact: boolean;
 }) {
   const track = useRef<{ pieces: TrackedPiece[]; nextId: number }>({ pieces: [], nextId: 1 });
   const board = state.pos.board;
@@ -584,10 +605,11 @@ function Pieces({ state, set, bottomColor, faceTop, anim, ia, reduced }: {
           movable={ia.movable.has(p.sq)}
           onClick={ia.click}
           reduced={reduced}
+          contact={contact}
         />
       ))}
       {dying.map((p) => (
-        <Piece3D key={`x${p.id}`} tp={p} set={set} yaw={pieceYaw(p.piece, bottomColor, faceTop)} selected={false} movable={false} onClick={() => {}} reduced={reduced} dying />
+        <Piece3D key={`x${p.id}`} tp={p} set={set} yaw={pieceYaw(p.piece, bottomColor, faceTop)} selected={false} movable={false} onClick={() => {}} reduced={reduced} contact={contact} dying />
       ))}
     </>
   );
@@ -595,9 +617,27 @@ function Pieces({ state, set, bottomColor, faceTop, anim, ia, reduced }: {
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
-function Piece3D({ tp, set, yaw, selected, movable, onClick, reduced, dying = false }: {
-  tp: TrackedPiece; set: Set3D; yaw: number; selected: boolean; movable: boolean; onClick: (sq: number) => void; reduced: boolean; dying?: boolean;
+/** Baked soft contact shadow, used when real-time shadows are off (low quality). */
+let contactTex: THREE.Texture | null = null;
+function contactTexture() {
+  if (contactTex) return contactTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(32, 32, 4, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(0,0,0,0.62)');
+  grad.addColorStop(0.55, 'rgba(0,0,0,0.3)');
+  grad.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  contactTex = new THREE.CanvasTexture(c);
+  return contactTex;
+}
+
+function Piece3D({ tp, set, yaw, selected, movable, onClick, reduced, contact, dying = false }: {
+  tp: TrackedPiece; set: Set3D; yaw: number; selected: boolean; movable: boolean; onClick: (sq: number) => void; reduced: boolean; contact: boolean; dying?: boolean;
 }) {
+  const blob = useRef<THREE.Mesh>(null);
   const type = typeOf(tp.piece);
   const white = colorOfPiece(tp.piece) === 'w';
   const geo = pieceGeometry(set, type, !white);
@@ -652,6 +692,8 @@ function Piece3D({ tp, set, yaw, selected, movable, onClick, reduced, dying = fa
       g.position.y = -0.2 * k + Math.sin(Math.PI * Math.min(1, k * 1.4)) * 0.25;
       g.rotation.y += dt * 6 * k;
     }
+    // Keep the contact shadow on the board while the piece lifts or hops.
+    if (blob.current) blob.current.position.y = 0.006 - g.position.y / Math.max(0.001, g.scale.y);
   });
 
   const handle = (e: ThreeEvent<MouseEvent>) => {
@@ -669,6 +711,12 @@ function Piece3D({ tp, set, yaw, selected, movable, onClick, reduced, dying = fa
       {slots.map((s) => (
         <mesh key={s} geometry={geo[s]} material={mats[s]} castShadow={s === 'body' || s === 'trim'} receiveShadow={s === 'body'} />
       ))}
+      {contact && (
+        <mesh ref={blob} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, 0]} raycast={noRay} renderOrder={1}>
+          <planeGeometry args={[0.86, 0.86]} />
+          <meshBasicMaterial map={contactTexture()} transparent depthWrite={false} toneMapped={false} />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -676,9 +724,11 @@ function Piece3D({ tp, set, yaw, selected, movable, onClick, reduced, dying = fa
 // ------------------------------------------------------------ test hook
 
 /** Lets Playwright tap real squares through the 3D picking path. */
-function TestHook({ ia }: { ia: Interaction }) {
+function TestHook({ ia, quality }: { ia: Interaction; quality: Quality }) {
   const iaRef = useRef(ia);
   iaRef.current = ia;
+  const qRef = useRef(quality);
+  qRef.current = quality;
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
   const controls = useThree((s) => s.controls);
@@ -696,6 +746,7 @@ function TestHook({ ia }: { ia: Interaction }) {
         if (c) { c.target.copy(t); c.update(); }
       },
       frames: () => frames.current,
+      quality: () => qRef.current,
       movable: () => [...iaRef.current.movable],
       targets: () => [...iaRef.current.targets.keys()],
       project: (sq: number, y = 0.02) => {

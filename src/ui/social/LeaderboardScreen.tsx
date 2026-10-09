@@ -4,6 +4,7 @@ import type { PublicUser } from '../../net/protocol';
 import { Avatar } from './Avatar';
 import { client, useOnline } from './useOnline';
 import './social.css';
+import { Icon } from '../icons';
 
 type Scope = 'all' | 'friends';
 
@@ -33,14 +34,14 @@ export function LeaderboardScreen({ onSignUp }: { onSignUp: () => void }) {
         {account && (
           <div className="fchips">
             <button className={`fchip ${scope === 'all' ? 'on' : ''}`} onClick={() => setScope('all')} data-testid="lb-all">Everyone</button>
-            <button className={`fchip ${scope === 'friends' ? 'on' : ''}`} onClick={() => setScope('friends')} data-testid="lb-friends">★ Friends</button>
+            <button className={`fchip ${scope === 'friends' ? 'on' : ''}`} onClick={() => setScope('friends')} data-testid="lb-friends"><Icon name="star" size={14} /> Friends</button>
           </div>
         )}
       </header>
 
       {!HAS_SERVER ? (
         <section className="set-card cta">
-          <span className="cta-icon">🏆</span>
+          <span className="cta-icon"><Icon name="trophy" size={26} /></span>
           <div><b>Rankings are coming soon</b><small>Rated play launches with online accounts. Sharpen up on the Learn path and against the bots until then.</small></div>
         </section>
       ) : (
@@ -59,13 +60,13 @@ export function LeaderboardScreen({ onSignUp }: { onSignUp: () => void }) {
           )}
 
           {rows === null ? <p className="prof-note lb-loading">Loading…</p> : !rows.length ? (
-            <section className="set-card cta"><span className="cta-icon">🏁</span><div><b>{err ? 'Couldn’t load the leaderboard' : 'No rated games yet'}</b><small>{err ? 'Check your connection and try again.' : 'Play a rated Quick Match to claim the top spot.'}</small></div></section>
+            <section className="set-card cta"><span className="cta-icon"><Icon name="flag" size={26} /></span><div><b>{err ? 'Couldn’t load the leaderboard' : 'No rated games yet'}</b><small>{err ? 'Check your connection and try again.' : 'Play a rated Quick Match to claim the top spot.'}</small></div></section>
           ) : (
             <>
               <section className="lb-podium" data-testid="lb-podium">
                 {[1, 0, 2].map((i) => podium[i] && (
                   <div key={podium[i].id} className={`pod pod-${i + 1} ${podium[i].id === me?.id ? 'me' : ''}`}>
-                    <span className="pod-crown">{i === 0 ? '👑' : i === 1 ? '🥈' : '🥉'}</span>
+                    <span className={`pod-crown pc-${i + 1}`}><Icon name={i === 0 ? 'crown' : 'medal'} size={i === 0 ? 26 : 22} label={`Rank ${i + 1}`} /></span>
                     <Avatar name={podium[i].name} avatar={podium[i].avatar} size={i === 0 ? 64 : 52} />
                     <b>{podium[i].name}</b>
                     <small>{podium[i].rating}</small>

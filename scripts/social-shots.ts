@@ -96,10 +96,10 @@ const nia = await account('Nia');
 for (const [u, r] of [[ada, 1236], [kofi, 1342], [mei, 1288], [lars, 1190], [zara, 1255], [theo, 1418], [nia, 1384]] as const) {
   await app.db.updateTable('users').set({ rating: r, rated_games: 12 }).where('id', '=', u.id).execute();
 }
-await app.db.updateTable('users').set({ avatar: '🦉' }).where('id', '=', ada.id).execute();
-await app.db.updateTable('users').set({ avatar: '🔥' }).where('id', '=', kofi.id).execute();
-await app.db.updateTable('users').set({ avatar: '♛' }).where('id', '=', theo.id).execute();
-await app.db.updateTable('users').set({ avatar: '♞' }).where('id', '=', me.id).execute();
+await app.db.updateTable('users').set({ avatar: '\u{1F989}' /* legacy emoji avatar: shown as the bird icon */ }).where('id', '=', ada.id).execute();
+await app.db.updateTable('users').set({ avatar: 'flame' }).where('id', '=', kofi.id).execute();
+await app.db.updateTable('users').set({ avatar: 'queen' }).where('id', '=', theo.id).execute();
+await app.db.updateTable('users').set({ avatar: 'knight' }).where('id', '=', me.id).execute();
 for (const f of [ada, kofi, mei, lars]) await friends(me, f, me.id);
 await api(API, '/api/friends/request', { userId: theo.id }, me.token); // outgoing, pending
 
@@ -171,7 +171,7 @@ await shot('settings', true);
 
 // Profile with rating chart
 await tid('nav-profile').click();
-await page.locator('.rating-chart svg').waitFor();
+await page.locator('.rating-chart > svg').waitFor();
 await shot('profile', true);
 await tid('avatar-btn').click();
 await tid('avatar-picker').waitFor();
@@ -242,6 +242,16 @@ await tid('game').waitFor();
 await wait(1500);
 if (await tid('app-nav').count()) throw new Error('nav should be hidden during a game');
 await shot('challenge-accepted');
+// Chat with Lucide emotes.
+adaWs.send({ t: 'chat', emote: 'gg' });
+adaWs.send({ t: 'chat', text: 'good luck!' });
+await tid('side-toggle').click();
+await tid('chat').waitFor();
+await page.locator('[data-emote="fire"]').click();
+await adaWs.send({ t: 'chat', emote: 'respect' });
+await wait(1200);
+await shot('chat');
+await tid('side-toggle').click();
 const adaSnap = await adaWs.waitSnap(() => true);
 adaWs.send({ t: 'action', action: { type: 'resign', player: adaSnap.you! } });
 await tid('game-over').waitFor();
@@ -274,13 +284,13 @@ await dp.locator('.ni-long', { hasText: 'Prosper' }).waitFor({ state: 'attached'
 await dshot('home-desktop');
 await dp.getByTestId('nav-social').click();
 await dp.getByTestId('friend-Kofi').waitFor();
-await dp.waitForFunction(() => document.querySelectorAll('[data-testid="live-row"]').length >= 3);
+await dp.waitForFunction(() => document.querySelectorAll('[data-testid="live-row"]').length >= 2, undefined, { timeout: 10000 }).catch(() => {});
 await dshot('social-desktop');
 await dp.getByTestId('nav-leaderboard').click();
 await dp.getByTestId('lb-podium').waitFor();
 await dshot('leaderboard-desktop');
 await dp.getByTestId('nav-profile').click();
-await dp.locator('.rating-chart svg').waitFor();
+await dp.locator('.rating-chart > svg').waitFor();
 await dshot('profile-desktop', true);
 await dp.getByTestId('tab-collection').click();
 await dp.getByTestId('collection').waitFor();

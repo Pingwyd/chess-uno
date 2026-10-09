@@ -14,6 +14,7 @@ import type { SocialTab } from './social/SocialScreen';
 import { Avatar } from './social/Avatar';
 import type { FriendInfo } from '../net/protocol';
 import './social/social.css';
+import { Icon } from './icons';
 
 export type OnlineIntent = { kind: 'join' | 'watch'; code: string } | null;
 
@@ -92,7 +93,7 @@ function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: {
   return (
     <div className="lobby" data-testid="lobby">
       <header className="lobby-bar">
-        <button className="icon-btn" onClick={() => { if (view.lobby.kind === 'queued') client.cancelQueue(); if (view.lobby.kind === 'waiting') client.leave(); onHome(); }} aria-label="Home">⌂</button>
+        <button className="icon-btn" onClick={() => { if (view.lobby.kind === 'queued') client.cancelQueue(); if (view.lobby.kind === 'waiting') client.leave(); onHome(); }} aria-label="Home"><Icon name="house" size={20} /></button>
         <h1>Online</h1>
         <span className={`conn conn-${bootError ? 'offline' : view.status}`} data-testid="conn-status"><i />{statusText}</span>
       </header>
@@ -240,7 +241,7 @@ function MyGames({ me, onReplay }: { me: PublicUser; onReplay: OpenReplay }) {
           <button key={g.gameId} className="recent-item" onClick={() => onReplay({ gameId: g.gameId })}>
             <span className={`ri-res ${o.cls}`}>{o.text}</span>
             <span className="ri-main"><b>vs {g.players[g.seat === 0 ? 1 : 0]}</b><small>{g.rated ? 'Rated' : 'Casual'} · {g.reason} · {g.turns} turn{g.turns === 1 ? '' : 's'} · {when(g.endedAt)}</small></span>
-            <span className="ri-go">Review ›</span>
+            <span className="ri-go">Review <Icon name="chevron-right" size={15} /></span>
           </button>
         );
       })}
@@ -258,20 +259,20 @@ function LobbyLinks({ view, onSocial, onLeaderboard }: { view: OnlineView; onSoc
   return (
     <section className="lobby-card lobby-links" data-testid="lobby-links">
       <button className="lobby-link" onClick={() => onSocial('friends')} data-testid="lobby-to-friends">
-        <span>🤝</span>
+        <span className="ll-icon"><Icon name="users" size={22} /></span>
         <span className="ll-text"><b>Friends {req > 0 && <span className="count-pill">{req} new</span>}</b>
           <small>{!account ? 'Sign up to add friends and challenge them' : friends.length ? `${on} of ${friends.length} online · challenge or watch` : 'Find players by name'}</small></span>
-        <span className="chev">›</span>
+        <span className="chev"><Icon name="chevron-right" size={20} /></span>
       </button>
       <button className="lobby-link" onClick={() => onSocial('live')} data-testid="lobby-to-live">
-        <span>📡</span>
+        <span className="ll-icon"><Icon name="radio" size={22} /></span>
         <span className="ll-text"><b>Live games</b><small>Watch games in progress — top-rated first</small></span>
-        <span className="chev">›</span>
+        <span className="chev"><Icon name="chevron-right" size={20} /></span>
       </button>
       <button className="lobby-link" onClick={onLeaderboard} data-testid="lobby-to-leaderboard">
-        <span>🏆</span>
+        <span className="ll-icon"><Icon name="trophy" size={22} /></span>
         <span className="ll-text"><b>Leaderboard</b><small>{account ? `You: ${user!.rating}` : 'Top rated players'}</small></span>
-        <span className="chev">›</span>
+        <span className="chev"><Icon name="chevron-right" size={20} /></span>
       </button>
     </section>
   );
@@ -284,7 +285,7 @@ function RankedNote() {
   const done = order.filter((id) => p.lessons[id]).length;
   return (
     <p className={`ranked-note ${p.rankedUnlocked ? 'on' : ''}`} data-testid="ranked-note">
-      {p.rankedUnlocked ? '🎓 Ranked unlocked — learning path complete' : `📘 Learning path ${done}/${order.length} — finish it to unlock ranked`}
+      <Icon name={p.rankedUnlocked ? 'graduation-cap' : 'book'} size={16} /> {p.rankedUnlocked ? 'Ranked unlocked — learning path complete' : `Learning path ${done}/${order.length} — finish it to unlock ranked`}
     </p>
   );
 }

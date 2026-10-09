@@ -5,6 +5,7 @@ import { DemoBoard } from './DemoBoard';
 import { PuzzleView } from './PuzzleView';
 import { CardRow, prefersReducedMotion, Rich, Stars, type BoardEnv } from './shared';
 import { sfx } from '../sound';
+import { Icon, asIcon } from '../icons';
 
 export type PlayMode = 'lesson' | 'placement' | 'daily';
 
@@ -38,11 +39,11 @@ export function LessonPlayer({ lesson, mode, env, color, onExit, onFinish, onNex
   return (
     <div className="lesson" style={{ ['--unit' as string]: color }} data-testid="lesson">
       <div className="lesson-bar">
-        <button className="icon-btn" onClick={onExit} aria-label="Close lesson" data-testid="lesson-close">✕</button>
+        <button className="icon-btn" onClick={onExit} aria-label="Close lesson" data-testid="lesson-close"><Icon name="x" size={20} /></button>
         <div className="lesson-progress" aria-label={`Step ${i + 1} of ${steps.length}`}>
           <div className="lesson-progress-fill" style={{ width: `${((result ? steps.length : i) / steps.length) * 100}%` }} />
         </div>
-        <span className="lesson-mistakes" title="Mistakes">{mistakes ? `✕ ${mistakes}` : ''}</span>
+        <span className="lesson-mistakes" title="Mistakes">{mistakes ? <><Icon name="x" size={14} /> {mistakes}</> : ''}</span>
       </div>
       <div className="lesson-body">
         {result ? (
@@ -103,7 +104,7 @@ function Mcq({ step, env, onMistake, onDone }: { step: Extract<Step, { kind: 'mc
       </div>
       {picked !== null && (
         <div className={`feedback ${ok ? 'good' : 'bad'}`} data-testid={ok ? 'feedback-correct' : 'feedback-wrong'} role="status">
-          <div className="feedback-head"><span className="feedback-icon">{ok ? '✓' : '✕'}</span><b>{ok ? 'Correct!' : `Answer: ${step.options[step.answer]}`}</b></div>
+          <div className="feedback-head"><span className="feedback-icon"><Icon name={ok ? 'check' : 'x'} size={18} strokeWidth={3} /></span><b>{ok ? 'Correct!' : `Answer: ${step.options[step.answer]}`}</b></div>
           <p><Rich text={step.explain} /></p>
           <div className="feedback-actions"><button className="btn primary wide" onClick={onDone} data-testid="continue">Continue</button></div>
         </div>
@@ -131,7 +132,7 @@ function Complete({ lesson, mode, stars, outcome, mistakes, hints, onExit, onNex
   return (
     <div className="complete" data-testid="lesson-complete">
       {outcome && <Confetti />}
-      <div className="complete-crest">{outcome ? (mode === 'daily' ? '📅' : lesson.icon) : '↺'}</div>
+      <div className="complete-crest"><Icon name={outcome ? (mode === 'daily' ? 'calendar' : asIcon(lesson.icon)) : 'rotate-ccw'} size="1em" strokeWidth={1.7} /></div>
       <h2>{title}</h2>
       {!outcome ? (
         <p className="complete-sub">{mistakes} mistakes — the placement check needs at most 1. Start with the first lesson, or try again later.</p>
@@ -139,15 +140,15 @@ function Complete({ lesson, mode, stars, outcome, mistakes, hints, onExit, onNex
         <>
           {mode === 'lesson' && <Stars n={stars} size="lg" animate />}
           <div className="complete-stats">
-            <div className="stat-pill xp"><span>⚡</span><b data-testid="xp-gained">+{xp}</b><small>XP</small></div>
-            <div className="stat-pill streak"><span>🔥</span><b>{outcome.streak}</b><small>day streak</small></div>
-            {mode === 'lesson' && <div className="stat-pill acc"><span>🎯</span><b>{mistakes === 0 ? '100%' : `${mistakes} slip${mistakes > 1 ? 's' : ''}`}</b><small>{hints ? `${hints} hint${hints > 1 ? 's' : ''} used` : 'accuracy'}</small></div>}
+            <div className="stat-pill xp"><span><Icon name="zap" size={20} /></span><b data-testid="xp-gained">+{xp}</b><small>XP</small></div>
+            <div className="stat-pill streak"><span><Icon name="flame" size={20} /></span><b>{outcome.streak}</b><small>day streak</small></div>
+            {mode === 'lesson' && <div className="stat-pill acc"><span><Icon name="target" size={20} /></span><b>{mistakes === 0 ? '100%' : `${mistakes} slip${mistakes > 1 ? 's' : ''}`}</b><small>{hints ? `${hints} hint${hints > 1 ? 's' : ''} used` : 'accuracy'}</small></div>}
           </div>
           {badges.length > 0 && (
             <div className="new-badges">
               {badges.map((b) => (
                 <div key={b.id} className="new-badge" data-testid="new-badge">
-                  <span className="badge-medal">{b.icon}</span>
+                  <span className="badge-medal"><Icon name={asIcon(b.icon)} size="1em" /></span>
                   <div><b>New badge: {b.name}</b><small>{b.reward ? `Unlocked the ${SKIN_NAMES[b.reward.skin]} piece skin!` : b.desc}</small></div>
                 </div>
               ))}

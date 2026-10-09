@@ -4,24 +4,35 @@
  */
 import type { GameAction, GameState, PlayerId } from '../rules/game';
 
+/** Quick emotes: id → label. The client draws each with a Lucide icon (no emoji). Old ids stay valid. */
 export const EMOTES = {
   gg: 'GG',
-  clap: '👏',
-  wow: '😮',
-  lol: '😂',
+  clap: 'Nice move',
+  wow: 'Wow',
+  lol: 'Haha',
+  fire: 'On fire',
+  oops: 'Oops',
+  respect: 'Respect',
   niceReverse: 'Nice Reverse!',
 } as const;
 export type EmoteId = keyof typeof EMOTES;
 
 export const CHAT_MAX_LENGTH = 200;
 
-/** Profile avatars: a symbol from this list, or null for the name's initial. */
 /** How long a friend challenge stays open before it expires (server default; `CHALLENGE_TTL_MS` env overrides). */
 export const CHALLENGE_TTL_MS = 5 * 60_000;
 
-export const AVATARS = ['♞', '♛', '♜', '♝', '♚', '♟', '🃏', '🔥', '🌊', '⚡', '🌙', '⭐', '🦊', '🐉', '🦉', '👑'] as const;
+/** Profile avatars: a Lucide icon name from this list, or null for the name's initial. */
+export const AVATARS = ['knight', 'queen', 'rook', 'bishop', 'king', 'pawn', 'spade', 'flame', 'waves', 'zap', 'moon', 'star', 'cat', 'gem', 'bird', 'crown'] as const;
 export type AvatarId = (typeof AVATARS)[number];
 export const isAvatar = (v: unknown): v is AvatarId => typeof v === 'string' && (AVATARS as readonly string[]).includes(v);
+/** Avatars saved before the switch to icons were emoji/chess symbols; map them to the new ids. */
+const LEGACY_AVATARS: Record<string, AvatarId> = {
+  '\u265E': 'knight', '\u265B': 'queen', '\u265C': 'rook', '\u265D': 'bishop', '\u265A': 'king', '\u265F': 'pawn',
+  '\u{1F0CF}': 'spade', '\u{1F525}': 'flame', '\u{1F30A}': 'waves', '\u26A1': 'zap', '\u{1F319}': 'moon', '\u2B50': 'star',
+  '\u{1F98A}': 'cat', '\u{1F409}': 'gem', '\u{1F989}': 'bird', '\u{1F451}': 'crown',
+};
+export const normalizeAvatar = (v: unknown): AvatarId | null => (isAvatar(v) ? v : typeof v === 'string' ? LEGACY_AVATARS[v] ?? null : null);
 
 export interface PublicUser {
   id: string;

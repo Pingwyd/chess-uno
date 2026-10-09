@@ -94,7 +94,7 @@ describe('friends', () => {
 });
 
 describe('challenges', () => {
-  it('challenge → accept starts an unrated private game; presence shows playing with a code to watch', async () => {
+  it('challenge, accept starts an unrated private game; presence shows playing with a code to watch', async () => {
     const s = await startApp(); app = s.app;
     const ada = await account(s.base, 'Ada');
     const bob = await account(s.base, 'Bobby');
@@ -244,11 +244,13 @@ describe('profiles and account', () => {
     const bob = await account(s.base, 'Bobby');
     const guest = (await api(s.base, '/api/guest', {})).json.token;
 
-    expect((await api(s.base, '/api/profile', { name: 'Ada Lovelace', avatar: '🦉' }, ada.token)).json.user).toMatchObject({ name: 'Ada Lovelace', avatar: '🦉' });
+    expect((await api(s.base, '/api/profile', { name: 'Ada Lovelace', avatar: 'bird' }, ada.token)).json.user).toMatchObject({ name: 'Ada Lovelace', avatar: 'bird' });
+    // Old emoji avatars are no longer accepted (icons only).
+    expect((await api(s.base, '/api/profile', { avatar: '\u{1F989}' }, ada.token)).status).toBe(400);
     expect((await api(s.base, '/api/profile', { avatar: 'nope' }, ada.token)).status).toBe(400);
     expect((await api(s.base, '/api/profile', { name: '<script>' }, ada.token)).status).toBe(400);
     expect((await api(s.base, '/api/profile', { name: 'Guesty' }, guest)).status).toBe(403);
-    expect((await api(s.base, '/api/profile', { avatar: '♞' }, guest)).json.user.avatar).toBe('♞');
+    expect((await api(s.base, '/api/profile', { avatar: 'knight' }, guest)).json.user.avatar).toBe('knight');
 
     // Two rated games: Ada wins both (Bobby resigns).
     const a = await online(s.port, ada.token);

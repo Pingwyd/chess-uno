@@ -3,7 +3,7 @@ import { SignJWT, jwtVerify } from 'jose';
 import { randomInt, randomUUID } from 'node:crypto';
 import type { Kysely } from 'kysely';
 import type { Database, UsersTable } from './db';
-import type { PublicUser } from '../../src/net/protocol';
+import { normalizeAvatar, type PublicUser } from '../../src/net/protocol';
 import { START_RATING } from './rating';
 
 const ADJ = ['Swift', 'Arcane', 'Golden', 'Tidal', 'Bold', 'Clever', 'Lucky', 'Silent', 'Ember', 'Royal', 'Mystic', 'Brave'];
@@ -16,7 +16,7 @@ export function guestName(): string {
 export const toPublicUser = (u: UsersTable): PublicUser => ({
   id: u.id,
   name: u.name,
-  avatar: u.avatar ?? null,
+  avatar: normalizeAvatar(u.avatar),
   guest: !!u.is_guest,
   email: u.email,
   rating: u.rating,

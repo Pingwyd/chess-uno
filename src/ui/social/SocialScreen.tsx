@@ -5,6 +5,7 @@ import { FriendsTab } from '../settings/FriendsTab';
 import { LiveGames } from './LiveGames';
 import { client, useOnline } from './useOnline';
 import './social.css';
+import { Icon } from '../icons';
 
 export type SocialTab = 'friends' | 'live';
 
@@ -33,7 +34,7 @@ export function SocialScreen({ initialTab = 'friends', onChallenge, onWatch }: {
       </header>
       <nav className="set-tabs social-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'friends'} className={`set-tab ${tab === 'friends' ? 'on' : ''}`} onClick={() => pick('friends')} data-testid="social-tab-friends">
-          <span>🤝</span><span>Friends</span>{requests > 0 && <i className="tab-badge">{requests}</i>}
+          <Icon name="users" size={17} /><span>Friends</span>{requests > 0 && <i className="tab-badge">{requests}</i>}
         </button>
         <button role="tab" aria-selected={tab === 'live'} className={`set-tab ${tab === 'live' ? 'on' : ''}`} onClick={() => pick('live')} data-testid="social-tab-live">
           <span className="live-dot" /><span>Live games{view.live ? ` · ${view.live.length}` : ''}</span>
@@ -46,7 +47,7 @@ export function SocialScreen({ initialTab = 'friends', onChallenge, onWatch }: {
         <div className="social-col sc-live">
           {HAS_SERVER ? <LiveGames onWatch={onWatch} /> : (
             <section className="set-card cta">
-              <span className="cta-icon">📡</span>
+              <span className="cta-icon"><Icon name="radio" size={26} /></span>
               <div><b>Live games are coming soon</b><small>Watch top players and friends once online play launches.</small></div>
             </section>
           )}

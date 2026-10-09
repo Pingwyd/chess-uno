@@ -580,9 +580,9 @@ export function formatTurn(t: TurnRecord): string {
   if (t.skipped) return '— skipped —';
   const parts: string[] = [];
   for (const p of t.played) parts.push(p === 'skip' ? '{Skip}' : '{Reverse}');
-  for (const h of t.toHand) parts.push(`[${h === 'skip' ? 'Skip' : 'Reverse'}→hand]`);
-  for (const b of t.burned ?? []) parts.push(`[${b === 'skip' ? 'Skip' : 'Reverse'}✕]`);
-  if (t.card) parts.push(`[${t.card}${t.capped ? '→1' : ''}]`);
+  for (const h of t.toHand) parts.push(`[${h === 'skip' ? 'Skip' : 'Reverse'}->hand]`);
+  for (const b of t.burned ?? []) parts.push(`[${b === 'skip' ? 'Skip' : 'Reverse'}-burned]`);
+  if (t.card) parts.push(`[${t.card}${t.capped ? '->1' : ''}]`);
   parts.push(...t.moves);
   return parts.join(' ');
 }

@@ -1,5 +1,6 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { AVATARS, isAvatar } from '../src/net/protocol';
+import { AVATARS, isAvatar, normalizeAvatar } from '../src/net/protocol';
+import { isIconName } from '../src/ui/icons';
 import { localStats } from '../src/ui/settings/stats';
 import type { GameSummary } from '../src/replay/record';
 
@@ -26,7 +27,17 @@ describe('avatars', () => {
     expect(AVATARS).toHaveLength(16);
     expect(new Set(AVATARS).size).toBe(AVATARS.length);
     for (const a of AVATARS) expect(isAvatar(a)).toBe(true);
-    for (const v of ['', 'x', '<img>', null, 3, '♞♞']) expect(isAvatar(v)).toBe(false);
+    for (const v of ['', 'x', '<img>', null, 3, 'knightknight']) expect(isAvatar(v)).toBe(false);
+    // Every avatar is a Lucide icon in the app's icon set.
+    for (const a of AVATARS) expect(isIconName(a)).toBe(true);
+  });
+  it('maps legacy emoji/symbol avatars to icon ids', () => {
+    expect(normalizeAvatar('\u265E')).toBe('knight');
+    expect(normalizeAvatar('\u{1F989}')).toBe('bird');
+    expect(normalizeAvatar('\u{1F525}')).toBe('flame');
+    expect(normalizeAvatar('crown')).toBe('crown');
+    expect(normalizeAvatar('nope')).toBeNull();
+    expect(normalizeAvatar(null)).toBeNull();
   });
 });
 

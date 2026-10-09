@@ -9,7 +9,7 @@ export const unit4: Unit = {
   color: '#8a5cff',
   lessons: [
     {
-      id: 'e1', title: 'Holding cards', icon: '✋', minutes: 2,
+      id: 'e1', title: 'Holding cards', icon: 'layers', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Action cards go to your hand',
@@ -35,7 +35,7 @@ export const unit4: Unit = {
       ],
     },
     {
-      id: 'e2', title: 'Playing Skip', icon: '⊘', minutes: 3,
+      id: 'e2', title: 'Playing Skip', icon: 'skip', minutes: 3,
       steps: [
         {
           kind: 'explain', title: 'Two turns in a row',
@@ -63,7 +63,7 @@ export const unit4: Unit = {
       ],
     },
     {
-      id: 'e3', title: 'When to save a Skip', icon: '💎', minutes: 2,
+      id: 'e3', title: 'When to save a Skip', icon: 'gem', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Don’t waste it',
@@ -84,7 +84,7 @@ export const unit4: Unit = {
       ],
     },
     {
-      id: 'e4', title: 'Reverse', icon: '⇄', minutes: 3,
+      id: 'e4', title: 'Reverse', icon: 'reverse', minutes: 3,
       steps: [
         {
           kind: 'explain', title: 'Swap sides',
@@ -112,7 +112,7 @@ export const unit4: Unit = {
       ],
     },
     {
-      id: 'e5', title: 'Reverse timing', icon: '⏱', minutes: 2,
+      id: 'e5', title: 'Reverse timing', icon: 'rotate-ccw', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Rules of the swap',

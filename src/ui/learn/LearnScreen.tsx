@@ -10,6 +10,7 @@ import { Piece } from '../pieces';
 import { LessonPlayer, type PlayMode } from './LessonPlayer';
 import { CardRow, Stars, type BoardEnv } from './shared';
 import './learn.css';
+import { Icon, asIcon } from '../icons';
 
 export type LearnTab = 'path' | 'daily' | 'badges';
 
@@ -21,6 +22,7 @@ interface Props extends BoardEnv {
 }
 
 const UNIT_BADGE: Record<string, string> = { basics: 'board-ready', cards: 'card-shark', check: 'patient-hunter', actions: 'turntable', strategy: 'graduate' };
+const SYNC_TEXT: Record<string, string> = { synced: 'Synced to your account', offline: 'Offline — saved on this device', local: 'Saved on this device (sign up to sync)' };
 const WIGGLE = [0, 56, 84, 56, 0, -56, -84, -56];
 
 export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ...env }: Props) {
@@ -69,13 +71,13 @@ export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ..
   return (
     <div className="learn" data-testid="learn">
       <div className="learn-top">
-        <button className="icon-btn" onClick={onHome} aria-label="Home" data-testid="learn-home">⌂</button>
+        <button className="icon-btn" onClick={onHome} aria-label="Home" data-testid="learn-home"><Icon name="house" size={20} /></button>
         <h1 className="learn-title">Learn</h1>
         <div className="learn-chips">
-          <span className={`chip chip-streak ${st > 0 ? 'lit' : ''}`} title="Daily streak" data-testid="streak">🔥 {st}</span>
-          <span className="chip chip-xp" title="Total XP" data-testid="xp">⚡ {progress.xp}</span>
-          {progress.freezes > 0 && <span className="chip chip-freeze" title="Streak freeze ready: one missed day won't break your streak">❄</span>}
-          <span className={`chip chip-sync ${sync}`} title={sync === 'synced' ? 'Synced to your account' : sync === 'offline' ? 'Offline — saved on this device' : 'Saved on this device (sign up to sync)'}>{sync === 'synced' ? '☁️' : sync === 'offline' ? '📴' : '📱'}</span>
+          <span className={`chip chip-streak ${st > 0 ? 'lit' : ''}`} title="Daily streak" data-testid="streak"><Icon name="flame" size={15} /> {st}</span>
+          <span className="chip chip-xp" title="Total XP" data-testid="xp"><Icon name="zap" size={15} /> {progress.xp}</span>
+          {progress.freezes > 0 && <span className="chip chip-freeze" title="Streak freeze ready: one missed day won't break your streak" aria-label="Streak freeze ready"><Icon name="snowflake" size={15} /></span>}
+          <span className={`chip chip-sync ${sync}`} title={SYNC_TEXT[sync]}><Icon name={sync === 'synced' ? 'cloud-check' : sync === 'offline' ? 'offline' : 'smartphone'} size={15} label={SYNC_TEXT[sync]} /></span>
         </div>
       </div>
       <div className="learn-tabs" role="tablist">
@@ -88,7 +90,7 @@ export default function LearnScreen({ initialTab = 'path', onHome, onPlaying, ..
 
       <div className="learn-scroll" key={tab}>
         {tab === 'path' && <PathMap onStart={start} />}
-        {tab === 'daily' && <DailyTab onStart={() => start({ id: `daily-${utc}`, title: 'Daily puzzle', icon: '📅', minutes: 1, steps: [{ kind: 'puzzle', puzzle: daily }] }, 'daily')} />}
+        {tab === 'daily' && <DailyTab onStart={() => start({ id: `daily-${utc}`, title: 'Daily puzzle', icon: 'calendar', minutes: 1, steps: [{ kind: 'puzzle', puzzle: daily }] }, 'daily')} />}
         {tab === 'badges' && <BadgesTab pieceSet={env.pieceSet} />}
       </div>
 
@@ -116,7 +118,7 @@ function PathMap({ onStart }: { onStart: (l: Lesson, mode?: PlayMode) => void })
   }, []);
   return (
     <div className="path" ref={ref} data-testid="path-map">
-      {progress.rankedUnlocked && <div className="ranked-banner">🎓 Path complete — ranked play unlocked!</div>}
+      {progress.rankedUnlocked && <div className="ranked-banner"><Icon name="graduation-cap" size={18} /> Path complete — ranked play unlocked!</div>}
       {UNITS.map((u) => (
         <UnitSection key={u.id} unit={u} current={current} nudge={nudge} onNudge={(id) => { setNudge(id); setTimeout(() => setNudge(null), 1500); }} onStart={onStart} />
       ))}
@@ -155,7 +157,7 @@ function UnitSection({ unit, current, nudge, onNudge, onStart }: {
         <div className="unit-foot">
           <span>{done}/{ids.length} lessons</span>
           {unit.placement && !complete && (
-            <button className="btn ghost small" onClick={() => onStart(unit.placement!, 'placement')} data-testid="placement">Know chess? Test out ⤼</button>
+            <button className="btn ghost small" onClick={() => onStart(unit.placement!, 'placement')} data-testid="placement">Know chess? Test out <Icon name="skip-forward" size={15} /></button>
           )}
         </div>
       </header>
@@ -177,7 +179,7 @@ function UnitSection({ unit, current, nudge, onNudge, onStart }: {
                 aria-label={`${l.title}${rec ? `, ${rec.stars} stars` : state === 'locked' ? ', locked' : ''}`}
                 data-testid={`node-${l.id}`}
               >
-                <span className="node-icon">{state === 'locked' ? '🔒' : l.icon}</span>
+                <span className="node-icon"><Icon name={state === 'locked' ? 'lock' : asIcon(l.icon)} size="1em" /></span>
               </button>
               {rec && <Stars n={rec.stars} size="sm" />}
               <div className="node-label">{l.title}<small>{l.minutes} min</small></div>
@@ -187,7 +189,7 @@ function UnitSection({ unit, current, nudge, onNudge, onStart }: {
         })}
         {badge && (
           <div className={`node-wrap trophy-wrap ${trophy.x > W / 2 ? 'side-l' : 'side-r'}`} style={{ left: trophy.x, top: trophy.y }}>
-            <div className={`trophy ${progress.badges[badge.id] ? 'won' : ''}`} title={badge.desc}>{badge.icon}</div>
+            <div className={`trophy ${progress.badges[badge.id] ? 'won' : ''}`} title={badge.desc}><Icon name={asIcon(badge.icon)} size="1em" /></div>
             <div className="node-label">{badge.name}{badge.reward ? <small>Reward: {SKIN_NAMES[badge.reward.skin]}</small> : unit.id === 'strategy' ? <small>Unlocks ranked</small> : null}</div>
           </div>
         )}
@@ -213,7 +215,7 @@ function DailyTab({ onStart }: { onStart: () => void }) {
         <p>{p.prompt}</p>
         <CardRow cards={[...(p.hand ?? []), ...p.cards]} />
         {solved ? (
-          <div className="daily-done" data-testid="daily-solved">✓ Solved today — come back tomorrow for a new one</div>
+          <div className="daily-done" data-testid="daily-solved"><Icon name="check" size={16} /> Solved today — come back tomorrow for a new one</div>
         ) : (
           <button className="btn primary wide" onClick={onStart} data-testid="daily-start">Solve · +20 XP</button>
         )}
@@ -227,13 +229,13 @@ function DailyTab({ onStart }: { onStart: () => void }) {
             const frozen = progress.frozen.includes(d);
             return (
               <div key={d} className={`day ${on ? 'on' : ''} ${frozen ? 'frozen' : ''} ${d === today ? 'today' : ''}`}>
-                <span>{frozen ? '❄' : on ? '🔥' : '·'}</span>
+                <span>{frozen ? <Icon name="snowflake" size={16} label="Frozen" /> : on ? <Icon name="flame" size={16} label="Played" /> : '·'}</span>
                 <small>{new Date(`${d}T12:00:00Z`).toLocaleDateString(undefined, { weekday: 'narrow', timeZone: 'UTC' })}</small>
               </div>
             );
           })}
         </div>
-        <p className="week-note">{progress.freezes > 0 ? '❄ Streak freeze ready — miss one day and your streak survives.' : 'Streak freeze used. A 7-day streak earns a new one.'}</p>
+        <p className="week-note">{progress.freezes > 0 ? <><Icon name="snowflake" size={14} /> Streak freeze ready — miss one day and your streak survives.</> : 'Streak freeze used. A 7-day streak earns a new one.'}</p>
       </div>
     </div>
   );
@@ -249,7 +251,7 @@ function BadgesTab({ pieceSet }: { pieceSet: 'arcane' | 'classic' }) {
   return (
     <div className="badges-tab" data-testid="badges">
       <div className={`ranked-card ${progress.rankedUnlocked ? 'on' : ''}`} data-testid="ranked-status">
-        <span>{progress.rankedUnlocked ? '🎓' : '🔒'}</span>
+        <span><Icon name={progress.rankedUnlocked ? 'graduation-cap' : 'lock'} size={22} /></span>
         <div><b>Ranked play {progress.rankedUnlocked ? 'unlocked' : 'locked'}</b><small>{progress.rankedUnlocked ? 'You finished the learning path.' : 'Finish all 5 units of the path to unlock ranked Quick Match.'}</small></div>
       </div>
       <h3>Badges <small>{Object.keys(progress.badges).length}/{BADGES.length}</small></h3>
@@ -258,10 +260,10 @@ function BadgesTab({ pieceSet }: { pieceSet: 'arcane' | 'classic' }) {
           const got = progress.badges[b.id];
           return (
             <div key={b.id} className={`badge-tile ${got ? 'got' : ''}`} data-testid={`badge-${b.id}`}>
-              <span className="badge-medal">{b.icon}</span>
+              <span className="badge-medal"><Icon name={asIcon(b.icon)} size="1em" /></span>
               <b>{b.name}</b>
               <small>{b.desc}</small>
-              {b.reward && <em>{got ? '✓ ' : '🎁 '}{SKIN_NAMES[b.reward.skin]}</em>}
+              {b.reward && <em><Icon name={got ? 'check' : 'gift'} size={12} /> {SKIN_NAMES[b.reward.skin]}</em>}
             </div>
           );
         })}
@@ -280,7 +282,7 @@ function BadgesTab({ pieceSet }: { pieceSet: 'arcane' | 'classic' }) {
                   <Piece piece={side === 'w' ? 'N' : 'n'} set={pieceSet === 'classic' ? 'arcane' : pieceSet} />
                 </span>
                 <b>{SKIN_NAMES[skin]}</b>
-                <small>{on ? 'Equipped' : has ? 'Tap to equip' : `🔒 ${lockedBy(skin)?.name ?? ''}`}</small>
+                <small>{on ? 'Equipped' : has ? 'Tap to equip' : <><Icon name="lock" size={11} /> {lockedBy(skin)?.name ?? ''}</>}</small>
               </button>
             );
           })}

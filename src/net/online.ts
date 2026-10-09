@@ -60,6 +60,7 @@ export type LobbyState =
 export interface Notice {
   id: number;
   text: string;
+  /** Lucide icon name (src/ui/icons.tsx). */
   icon: string;
   /** Optional button: open the friends tab. */
   action?: 'friends';
@@ -365,8 +366,8 @@ export class OnlineClient {
       case 'social': {
         void this.loadFriends();
         const name = msg.user.name;
-        if (msg.event === 'request') this.notify(`${name} sent you a friend request`, '🤝', 'friends');
-        if (msg.event === 'accepted') this.notify(`${name} is now your friend`, '🎉', 'friends');
+        if (msg.event === 'request') this.notify(`${name} sent you a friend request`, 'handshake', 'friends');
+        if (msg.event === 'accepted') this.notify(`${name} is now your friend`, 'party', 'friends');
         return;
       }
       case 'challenge':
@@ -375,10 +376,10 @@ export class OnlineClient {
       case 'challengeUpdate': {
         const had = this.view.challenges.some((c) => c.id === msg.id);
         if (had) this.update({ challenges: this.view.challenges.filter((c) => c.id !== msg.id) });
-        if (msg.status === 'declined' && !had) this.notify(`${msg.by} declined your challenge`, '✋');
-        if (msg.status === 'expired' && !had) this.notify(`${msg.by === this.view.user?.name ? 'No answer' : msg.by} — challenge expired`, '⌛');
-        if (msg.status === 'expired' && had) this.notify('Challenge expired', '⌛');
-        if (msg.status === 'cancelled' && had) this.notify(`${msg.by} withdrew the challenge`, '↩');
+        if (msg.status === 'declined' && !had) this.notify(`${msg.by} declined your challenge`, 'hand');
+        if (msg.status === 'expired' && !had) this.notify(`${msg.by === this.view.user?.name ? 'No answer' : msg.by} — challenge expired`, 'hourglass');
+        if (msg.status === 'expired' && had) this.notify('Challenge expired', 'hourglass');
+        if (msg.status === 'cancelled' && had) this.notify(`${msg.by} withdrew the challenge`, 'undo');
         return;
       }
       case 'liveGames':

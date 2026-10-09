@@ -237,7 +237,7 @@ describe('action cards: hold and play (§2.4)', () => {
     s = draw(s);
     expect(s.hands[0].map((c) => c.kind)).toEqual(['skip', 'reverse']);
     expect(s.card?.kind).toBe('2');
-    expect(formatTurn({ ...s.history[0] })).toBe('[Skip→hand] [Reverse→hand] [2→1]');
+    expect(formatTurn({ ...s.history[0] })).toBe('[Skip->hand] [Reverse->hand] [2->1]');
   });
   it('held cards cannot be played on White\'s first turn', () => {
     const s = createGame({ deckOrder: ['skip', '1'] });
@@ -374,7 +374,7 @@ describe('rules v2: one Reverse per player per game', () => {
     expect(s.events.some((e) => e.type === 'burnCard' && e.player === 0 && e.from === 'hand')).toBe(true);
     const turn = s.history.find((t) => t.played.includes('reverse'))!;
     expect(turn.burned).toEqual(['reverse']);
-    expect(formatTurn(turn)).toBe('{Reverse} [Reverse✕]');
+    expect(formatTurn(turn)).toBe('{Reverse} [Reverse-burned]');
   });
   it('a Reverse drawn after yours is used is discarded and you draw again', () => {
     let s = play(['reverse', ...ones(10), '1', 'reverse', '2', ...ones(20)]);
@@ -388,7 +388,7 @@ describe('rules v2: one Reverse per player per game', () => {
     expect(s.card?.kind).toBe('2');
     expect(s.movesAllowed).toBe(2);
     expect(s.discard.some((c) => c.kind === 'reverse')).toBe(true);
-    expect(formatTurn(s.history[s.history.length - 1])).toBe('[Reverse✕] [2]');
+    expect(formatTurn(s.history[s.history.length - 1])).toBe('[Reverse-burned] [2]');
   });
   it('the reducer (and so the server) rejects a second Reverse', () => {
     let s = play(['reverse', ...ones(40)]);

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Icon } from './icons';
 import { EMOTES } from '../net/protocol';
 import { other, squareName, type PromotionPiece } from '../rules/chess';
 import { useSettings } from './settings/store';
@@ -177,7 +178,7 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
 
   const commit = (from: number, to: number, promo?: PromotionPiece) =>
     dispatch({ type: 'move', player: state.current, from, to, promotion: promo });
-  // Settings → "Confirm moves": stage the move and wait for ✓.
+  // Settings > "Confirm moves": stage the move and wait for Play.
   const move = (from: number, to: number, promo?: PromotionPiece) => {
     if (confirmMoves) setPending({ from, to, promo });
     else commit(from, to, promo);
@@ -223,9 +224,9 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
       {pending && (
         <div className={`confirm-move ${pass && state.current === top ? 'confirm-top' : ''}`} data-testid="confirm-move">
           <span className="confirm-piece"><Piece piece={state.pos.board[pending.from]} set={pieceSet} /></span>
-          <span className="confirm-text">{squareName(pending.from)} → {squareName(pending.to)}{pending.promo ? `=${pending.promo.toUpperCase()}` : ''}</span>
+          <span className="confirm-text">{squareName(pending.from)} <Icon name="arrow-right" size={15} /> {squareName(pending.to)}{pending.promo ? `=${pending.promo.toUpperCase()}` : ''}</span>
           <button className="btn small ghost" onClick={() => setPending(null)} data-testid="confirm-undo">Undo</button>
-          <button className="btn small primary" onClick={() => { commit(pending.from, pending.to, pending.promo); setPending(null); }} data-testid="confirm-ok">Play ✓</button>
+          <button className="btn small primary" onClick={() => { commit(pending.from, pending.to, pending.promo); setPending(null); }} data-testid="confirm-ok"><Icon name="check" size={16} /> Play</button>
         </div>
       )}
       {has3D() && (
@@ -257,7 +258,7 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
         <>
           <header className="game-bar">
             {(!online || spectator || state.phase === 'over') && (
-              <button className="icon-btn" onClick={online ? online.onLeave : onHome} aria-label={online ? 'Back to lobby' : 'Home'}>{online ? '‹' : '⌂'}</button>
+              <button className="icon-btn" onClick={online ? online.onLeave : onHome} aria-label={online ? 'Back to lobby' : 'Home'}><Icon name={online ? 'chevron-left' : 'house'} size={20} /></button>
             )}
             <div className="game-bar-title">
               {online
@@ -266,12 +267,12 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
                   : <>vs {state.players[top].name}{online.snap.rated && <span className="rated-tag">RATED</span>}</>
                 : <>vs {BOT_NAMES[setup.botLevel]}</>}
             </div>
-            {online && online.snap.spectators > 0 && <span className="spectators" title="Spectators">👁 {online.snap.spectators}</span>}
+            {online && online.snap.spectators > 0 && <span className="spectators" title="Spectators" aria-label={`${online.snap.spectators} watching`}><Icon name="eye" size={16} /> {online.snap.spectators}</span>}
             {online && !spectator && <ShareWatch code={online.snap.code} />}
-            <button className="icon-btn" onClick={onTogglePieces} title="Toggle piece set">{pieceSet === 'arcane' ? '♞' : '✦'}</button>
+            <button className="icon-btn" onClick={onTogglePieces} title="Toggle piece set" aria-label="Toggle piece set"><Icon name={pieceSet === 'arcane' ? 'knight' : 'sparkles'} size={20} /></button>
             {!wide && (
               <button className="icon-btn log-toggle" onClick={() => setShowLog((v) => !v)} aria-label={online ? 'Chat and turns' : 'Move list'} data-testid="side-toggle">
-                {online ? '💬' : '☰'}
+                <Icon name={online ? 'chat' : 'menu'} size={20} />
                 {online && unread > 0 && !showLog && <span className="unread">{unread}</span>}
               </button>
             )}
@@ -440,7 +441,7 @@ function GameOver({ state, result, pass, onRematch, onHome, online, onReview }: 
     const turns = state.history.filter((t) => !t.skipped).length;
     return (
       <div className={`panel gameover ${rotated ? 'rotated' : ''} ${won ? 'won' : draw ? 'drawn' : 'lost'}`} data-testid="game-over">
-        <div className="gameover-crest">{draw ? '½' : won || viewer === null ? '♛' : '♚'}</div>
+        <div className="gameover-crest"><Icon name={draw ? 'scale' : won || viewer === null ? 'trophy' : 'flag'} size="1em" strokeWidth={1.6} /></div>
         <h2>{title}</h2>
         <p>{sub}</p>
         <div className="gameover-stats">
@@ -450,13 +451,13 @@ function GameOver({ state, result, pass, onRematch, onHome, online, onReview }: 
         </div>
         {delta !== null && info?.ratingAfter && viewer !== null && (
           <div className={`rating-change ${delta >= 0 ? 'up' : 'down'}`} data-testid="rating-change">
-            Rating {info.ratingAfter[viewer]} <b>{delta >= 0 ? `▲ +${delta}` : `▼ ${delta}`}</b>
+            Rating {info.ratingAfter[viewer]} <b><Icon name={delta >= 0 ? 'trend-up' : 'trend-down'} size={16} label={delta >= 0 ? 'up' : 'down'} /> {delta >= 0 ? `+${delta}` : delta}</b>
           </div>
         )}
         {info && <div className="seed-note">Deck seed {info.seed} — the shuffle can be verified</div>}
         {onReview && (
           <button className="btn review-btn" onClick={onReview} data-testid="review-game">
-            <span className="review-btn-icon">✦</span>
+            <span className="review-btn-icon"><Icon name="sparkles" size={22} /></span>
             <span><b>Review game</b><small>Replay every turn with the review bot</small></span>
           </button>
         )}
@@ -542,7 +543,7 @@ function ShareWatch({ code }: { code: string }) {
         setTimeout(() => setCopied(false), 1500);
       }}
     >
-      {copied ? '✓' : '🔗'}
+      <Icon name={copied ? 'check' : 'link'} size={18} />
     </button>
   );
 }

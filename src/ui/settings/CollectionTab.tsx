@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { getProgress, setProgress, useProgress } from '../../learn/store';
 import { BADGES, SKIN_NAMES, equipSkin, ownedSkins, type BlackSkin, type WhiteSkin } from '../../learn/progress';
 import { Piece, type PieceSet } from '../pieces';
+import { Icon, asIcon } from '../icons';
 
 const WHITE: WhiteSkin[] = ['ember', 'frost', 'gilded'];
 const BLACK: BlackSkin[] = ['tide', 'rose', 'aurora'];
@@ -62,7 +63,7 @@ export function CollectionTab({ pieceSet, onPieceSet, onLearn }: { pieceSet: Pie
                     onClick={() => equip(side, skin)} data-testid={`pskin-${skin}`} aria-pressed={on}>
                     <span className="pskin-pieces"><Piece piece={side === 'w' ? 'K' : 'k'} set="arcane" /><Piece piece={side === 'w' ? 'N' : 'n'} set="arcane" /></span>
                     <b>{SKIN_NAMES[skin]}</b>
-                    <small className={on ? 'eq' : ''}>{on ? '✓ Equipped' : has ? 'Tap to equip' : `🔒 ${lockedBy(skin)?.name ?? ''}`}</small>
+                    <small className={on ? 'eq' : ''}>{on ? <><Icon name="check" size={12} /> Equipped</> : has ? 'Tap to equip' : <><Icon name="lock" size={11} /> {lockedBy(skin)?.name ?? ''}</>}</small>
                   </button>
                 );
               })}
@@ -87,13 +88,13 @@ export function CollectionTab({ pieceSet, onPieceSet, onLearn }: { pieceSet: Pie
             const when = p.badges[b.id];
             return (
               <div key={b.id} className={`coll-badge ${when ? 'got' : ''}`} data-testid={`badge-${b.id}`}>
-                <i>{b.icon}</i>
+                <i><Icon name={asIcon(b.icon)} size={22} /></i>
                 <div>
                   <b>{b.name}</b>
                   <small>{b.desc}</small>
                   <span className="coll-tags">
-                    {when ? <em className="tag-got">Earned {day(when)}</em> : <em className="tag-lock">🔒 Locked</em>}
-                    {b.reward && <em className="tag-skin">🎨 {SKIN_NAMES[b.reward.skin]}</em>}
+                    {when ? <em className="tag-got">Earned {day(when)}</em> : <em className="tag-lock"><Icon name="lock" size={11} /> Locked</em>}
+                    {b.reward && <em className="tag-skin"><Icon name="gift" size={11} /> {SKIN_NAMES[b.reward.skin]}</em>}
                   </span>
                 </div>
               </div>
@@ -101,7 +102,7 @@ export function CollectionTab({ pieceSet, onPieceSet, onLearn }: { pieceSet: Pie
           })}
           {!shown.length && <p className="prof-note">{filter === 'earned' ? 'No badges yet. Finish your first lesson to earn one.' : 'You have every badge!'}</p>}
         </div>
-        <button className="btn ghost small coll-learn" onClick={onLearn} data-testid="collection-learn">📘 Earn more on the Learn path</button>
+        <button className="btn ghost small coll-learn" onClick={onLearn} data-testid="collection-learn"><Icon name="graduation-cap" size={16} /> Earn more on the Learn path</button>
       </section>
     </div>
   );

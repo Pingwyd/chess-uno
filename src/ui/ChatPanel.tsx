@@ -1,6 +1,18 @@
 import { useEffect, useRef, useState } from 'react';
 import { CHAT_MAX_LENGTH, EMOTES, type ChatMessage, type EmoteId } from '../net/protocol';
 import type { PlayerId } from '../rules/game';
+import { Icon, type IconName } from './icons';
+
+/** Quick emotes are Lucide icons (GG is styled text). */
+const EMOTE_ICON: Record<EmoteId, IconName | null> = {
+  gg: null, clap: 'thumbs-up', wow: 'zap', lol: 'laugh', fire: 'flame', oops: 'frown', respect: 'handshake', niceReverse: 'reverse',
+};
+
+function Emote({ id, full }: { id: EmoteId; full?: boolean }) {
+  const icon = EMOTE_ICON[id];
+  if (!icon) return <b className="emote-gg">{EMOTES[id]}</b>;
+  return <span className={`emote-chip emote-${id}`}><Icon name={icon} size={full ? 20 : 18} />{full && <span className="emote-label">{EMOTES[id]}</span>}</span>;
+}
 
 interface Props {
   messages: ChatMessage[];
@@ -17,11 +29,11 @@ export function ChatPanel({ messages, you, readOnly, onSend, onEmote }: Props) {
   return (
     <div className="chat" data-testid="chat">
       <div className="chat-list" ref={list}>
-        {messages.length === 0 && <div className="chat-empty">{readOnly ? 'No messages yet.' : 'Say hi, or send a quick emote 👋'}</div>}
+        {messages.length === 0 && <div className="chat-empty">{readOnly ? 'No messages yet.' : 'Say hi, or send a quick emote'}</div>}
         {messages.map((m) => (
           <div key={m.id} className={`chat-msg ${m.seat === you && you !== null ? 'mine' : ''} ${m.emote ? 'emote' : ''}`}>
             <span className="chat-name">{m.name}</span>
-            <span className="chat-text">{m.emote ? EMOTES[m.emote] : m.text}</span>
+            <span className="chat-text">{m.emote ? <Emote id={m.emote} full /> : m.text}</span>
           </div>
         ))}
       </div>
@@ -31,7 +43,7 @@ export function ChatPanel({ messages, you, readOnly, onSend, onEmote }: Props) {
         <>
           <div className="emote-row">
             {(Object.keys(EMOTES) as EmoteId[]).map((e) => (
-              <button key={e} className="emote-btn" onClick={() => onEmote(e)} data-emote={e}>{EMOTES[e]}</button>
+              <button key={e} className={`emote-btn ${EMOTE_ICON[e] ? 'icon-only' : ''}`} onClick={() => onEmote(e)} data-emote={e} aria-label={EMOTES[e]} title={EMOTES[e]}><Emote id={e} /></button>
             ))}
           </div>
           <form

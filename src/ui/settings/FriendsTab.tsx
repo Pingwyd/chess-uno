@@ -3,6 +3,7 @@ import type { FriendInfo, UserSearchHit } from '../../net/protocol';
 import { HAS_SERVER } from '../../net/online';
 import { Avatar, presenceText } from '../social/Avatar';
 import { client, useOnline } from '../social/useOnline';
+import { Icon } from '../icons';
 
 const ORDER = { playing: 0, online: 1, offline: 2 } as const;
 
@@ -19,7 +20,7 @@ export function FriendsTab({ onSignUp, onChallenge, onWatch }: {
   if (!HAS_SERVER) {
     return (
       <section className="set-card cta" data-testid="friends-soon">
-        <span className="cta-icon">🤝</span>
+        <span className="cta-icon"><Icon name="users" size={26} /></span>
         <div><b>Friends are coming soon</b><small>Friends, challenges and live games arrive with online play. Until then: Pass &amp; Play, the bots, and the Learn path.</small></div>
       </section>
     );
@@ -27,7 +28,7 @@ export function FriendsTab({ onSignUp, onChallenge, onWatch }: {
   if (!user || user.guest) {
     return (
       <section className="set-card cta" data-testid="friends-guest">
-        <span className="cta-icon">🤝</span>
+        <span className="cta-icon"><Icon name="users" size={26} /></span>
         <div><b>Sign up to add friends</b><small>Friends need an account so they can find you. See who’s online, challenge them to a game, and watch theirs live.</small></div>
         <button className="btn primary small" onClick={onSignUp} data-testid="friends-signup">Sign up</button>
       </section>
@@ -96,9 +97,9 @@ function FriendRow({ u, canChallenge, onChallenge, onWatch }: { u: FriendInfo; c
   const p = u.presence;
   return (
     <Row u={u} highlight={p?.status === 'playing'} sub={<span className={`ps ps-${p?.status ?? 'offline'}`}>{presenceText(p)}</span>}>
-      {p?.status === 'playing' && p.code && <button className="btn tiny" onClick={() => onWatch(p.code!)} data-testid={`watch-${u.name}`}>👁 Watch</button>}
-      {p?.status === 'online' && <button className="btn tiny primary" disabled={!canChallenge} onClick={onChallenge} data-testid={`challenge-${u.name}`}>⚔ Challenge</button>}
-      <button className="icon-btn tiny-icon" onClick={() => setMenu((v) => (v ? null : 'menu'))} aria-label={`More for ${u.name}`} data-testid={`more-${u.name}`}>⋯</button>
+      {p?.status === 'playing' && p.code && <button className="btn tiny" onClick={() => onWatch(p.code!)} data-testid={`watch-${u.name}`}><Icon name="eye" size={14} /> Watch</button>}
+      {p?.status === 'online' && <button className="btn tiny primary" disabled={!canChallenge} onClick={onChallenge} data-testid={`challenge-${u.name}`}><Icon name="swords" size={14} /> Challenge</button>}
+      <button className="icon-btn tiny-icon" onClick={() => setMenu((v) => (v ? null : 'menu'))} aria-label={`More for ${u.name}`} data-testid={`more-${u.name}`}><Icon name="more" size={18} /></button>
       {menu && (
         <div className="fr-menu">
           {menu === 'menu' ? (
@@ -133,7 +134,7 @@ function Search() {
   return (
     <section className="set-card search-card">
       <div className="search-box">
-        <span>🔍</span>
+        <span className="search-icon"><Icon name="search" size={18} /></span>
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Find players by name" aria-label="Search players" data-testid="friend-search" />
         {busy && <i className="spinner tiny-spin" />}
       </div>
@@ -145,7 +146,7 @@ function Search() {
               {u.relation === 'none' && <button className="btn tiny primary" onClick={async () => { const r = await act('request', u.id); if (r) update(u.id, r); }} data-testid={`add-${u.name}`}>+ Add</button>}
               {u.relation === 'outgoing' && <span className="rel-tag">Requested</span>}
               {u.relation === 'incoming' && <button className="btn tiny primary" onClick={async () => { const r = await act('accept', u.id); if (r) update(u.id, r); }}>Accept</button>}
-              {u.relation === 'friends' && <span className="rel-tag ok">✓ Friends</span>}
+              {u.relation === 'friends' && <span className="rel-tag ok"><Icon name="check" size={12} /> Friends</span>}
             </Row>
           ))}
         </div>

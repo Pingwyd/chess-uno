@@ -5,6 +5,7 @@
 import { useSyncExternalStore } from 'react';
 
 export type MotionPref = 'system' | 'on' | 'off';
+export type GraphicsPref = 'auto' | 'high' | 'low';
 
 export interface Settings {
   /** Show legal-move dots/rings for the selected piece. */
@@ -21,12 +22,14 @@ export interface Settings {
   reducedMotion: MotionPref;
   /** Avatar chosen on this device (synced to the account when signed in). */
   avatar: string | null;
+  /** 3D board rendering: adaptive, always full effects, or effects off (resolution stays crisp). */
+  graphics: GraphicsPref;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   hints: true, confirmMoves: false, sfxVolume: 0.8, musicVolume: 0, vibration: true,
   notify: { turn: true, friends: true, challenges: true, streak: true },
-  reducedMotion: 'system', avatar: null,
+  reducedMotion: 'system', avatar: null, graphics: 'auto',
 };
 
 const KEY = 'cu.settings';

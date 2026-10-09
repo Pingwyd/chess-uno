@@ -11,6 +11,7 @@ import { outcome, when, type OpenReplay } from '../RecentGames';
 import { setSettings, useSettings } from './store';
 import { localStats, type Stats } from './stats';
 import type { GameSummary } from '../../replay/record';
+import { Icon, asIcon } from '../icons';
 
 
 const pct = (s: Pick<Stats, 'w' | 'l' | 'd'>) => {
@@ -56,7 +57,7 @@ export function ProfileTab({ onSignUp, onReplay, onCollection }: {
       <section className="set-card prof-head">
         <button className="prof-avatar" onClick={() => setPicker((v) => !v)} aria-label="Change avatar" data-testid="avatar-btn">
           <Avatar name={name} avatar={avatar} size={76} />
-          <span className="prof-avatar-edit">✎</span>
+          <span className="prof-avatar-edit"><Icon name="pencil" size={13} /></span>
         </button>
         <div className="prof-id">
           <NameRow user={user} account={account} />
@@ -82,7 +83,7 @@ export function ProfileTab({ onSignUp, onReplay, onCollection }: {
 
       {!account && (
         <section className="set-card cta" data-testid="guest-cta">
-          <span className="cta-icon">✨</span>
+          <span className="cta-icon"><Icon name="sparkles" size={26} /></span>
           <div>
             <b>{HAS_SERVER ? 'Create a free account' : 'Accounts are coming soon'}</b>
             <small>{HAS_SERVER ? 'Get a rating and chart, add friends, challenge them and sync your learning path. Your guest games carry over.' : 'Ratings, friends and live games arrive with online play. Your stats below are saved on this device.'}</small>
@@ -96,7 +97,7 @@ export function ProfileTab({ onSignUp, onReplay, onCollection }: {
         <Stat label="Losses" value={stats.l} tone="loss" />
         <Stat label="Draws" value={stats.d} />
         <Stat label="Win rate" value={pct(stats)} />
-        <Stat label="Streak" value={stats.streak ? `🔥 ${stats.streak}` : '0'} sub={`best ${stats.best}`} />
+        <Stat label="Streak" value={stats.streak ? <><Icon name="flame" size={18} /> {stats.streak}</> : '0'} sub={`best ${stats.best}`} />
       </section>
       {account && (local.w + local.l + local.d > 0) && <p className="prof-note">Online games above · vs bots on this device: {local.w}W {local.l}L {local.d}D</p>}
 
@@ -108,9 +109,9 @@ export function ProfileTab({ onSignUp, onReplay, onCollection }: {
       )}
 
       <button className="set-card coll-teaser" onClick={onCollection} data-testid="open-collection">
-        <span className="coll-teaser-icons">{earned.slice(0, 4).map((b) => <i key={b.id}>{b.icon}</i>)}{!earned.length && <i>🏅</i>}</span>
+        <span className="coll-teaser-icons">{earned.slice(0, 4).map((b) => <i key={b.id}><Icon name={asIcon(b.icon)} size={16} /></i>)}{!earned.length && <i><Icon name="award" size={16} /></i>}</span>
         <span className="coll-teaser-text"><b>Badges &amp; skins</b><small>{earned.length}/{BADGES.length} badges · {SKIN_NAMES[progress.skins.w]} vs {SKIN_NAMES[progress.skins.b]}</small></span>
-        <span className="chev">›</span>
+        <span className="chev"><Icon name="chevron-right" size={20} /></span>
       </button>
       <Recent games={games} online={online} onReplay={onReplay} />
     </div>
@@ -139,13 +140,13 @@ function NameRow({ user, account }: { user: PublicUser | null; account: boolean 
     <form className="name-form" onSubmit={save}>
       <input value={val} onChange={(e) => setVal(e.target.value)} maxLength={20} autoFocus aria-label="Display name" data-testid="name-input" />
       <button className="btn tiny primary" type="submit" data-testid="save-name">Save</button>
-      <button className="btn tiny ghost" type="button" onClick={() => { setEdit(false); setErr(null); }}>✕</button>
+      <button className="btn tiny ghost" type="button" onClick={() => { setEdit(false); setErr(null); }} aria-label="Cancel"><Icon name="x" size={14} /></button>
       {err && <small className="field-error">{err}</small>}
     </form>
   );
 }
 
-function Stat({ label, value, sub, tone }: { label: string; value: string | number; sub?: string; tone?: 'win' | 'loss' }) {
+function Stat({ label, value, sub, tone }: { label: string; value: React.ReactNode; sub?: string; tone?: 'win' | 'loss' }) {
   return (
     <div className={`stat ${tone ?? ''}`}>
       <b>{value}</b>
@@ -182,14 +183,14 @@ function Recent({ games, online, onReplay }: { games: GameSummary[]; online: MyO
     <section className="set-card" data-testid="profile-recent">
       <div className="card-head">
         <h3>Recent games</h3>
-        {rows.length > 4 && <button className="link-btn" onClick={() => setAll((v) => !v)} data-testid="recent-link">{all ? 'Show less' : `All ${rows.length} ›`}</button>}
+        {rows.length > 4 && <button className="link-btn" onClick={() => setAll((v) => !v)} data-testid="recent-link">{all ? 'Show less' : <>All {rows.length} <Icon name="chevron-right" size={14} /></>}</button>}
       </div>
       {!rows.length && <p className="prof-note">No games yet — play a bot, a friend, or a Quick Match.</p>}
       {rows.slice(0, all ? 40 : 4).map((r) => (
         <button key={r.key} className="recent-item" onClick={r.open}>
           <span className={`ri-res ${r.res.cls}`}>{r.res.text}</span>
           <span className="ri-main"><b>{r.title}</b><small>{r.sub}</small></span>
-          <span className="ri-go">Review ›</span>
+          <span className="ri-go">Review <Icon name="chevron-right" size={15} /></span>
         </button>
       ))}
     </section>

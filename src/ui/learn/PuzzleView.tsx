@@ -12,6 +12,7 @@ import { CardBack, CardFace } from '../Card';
 import { Piece } from '../pieces';
 import { sfx } from '../sound';
 import { BoardBox, prefersReducedMotion, Rich, type BoardEnv } from './shared';
+import { Icon } from '../icons';
 
 interface Props {
   puzzle: Puzzle;
@@ -128,7 +129,7 @@ export function PuzzleView({ puzzle, env, onMistake, onHint, onDone }: Props) {
           onClick={() => { if (!hint) onHint(); setHint(true); }}
           disabled={!!verdict?.ok || revealing}
           data-testid="hint"
-        >💡 Hint</button>
+        ><Icon name="lightbulb" size={15} /> Hint</button>
       </div>
       {hint && <div className="hint-bubble" data-testid="hint-text"><Rich text={puzzle.hint} /></div>}
 
@@ -160,7 +161,7 @@ export function PuzzleView({ puzzle, env, onMistake, onHint, onDone }: Props) {
                 <button key={c.id} className={`hand-play ${canPlay ? 'playable' : ''}`} disabled={!canPlay} onClick={() => playCard(c.kind as ActionKind)}
                   title={blocked ?? `Play ${c.kind}`} data-testid={`play-${c.kind}`}>
                   <CardFace kind={c.kind} size="xs" />
-                  {blocked && s.phase === 'start' ? <span className="hand-lock">🔒</span> : null}
+                  {blocked && s.phase === 'start' ? <span className="hand-lock"><Icon name="lock" size={14} label="Locked" /></span> : null}
                 </button>
               );
             })}
@@ -169,7 +170,7 @@ export function PuzzleView({ puzzle, env, onMistake, onHint, onDone }: Props) {
         {choosing && <button className="btn primary small" onClick={() => act(applyAction(s, { type: 'draw', player: LEARNER }, 0))} data-testid="draw">Draw</button>}
       </div>
       {hand.some((c) => c.kind === 'reverse') && s.phase === 'start' && cardBlockReason(s, LEARNER, 'reverse') && (
-        <div className="lock-note">🔒 {cardBlockReason(s, LEARNER, 'reverse')}</div>
+        <div className="lock-note"><Icon name="lock" size={13} /> {cardBlockReason(s, LEARNER, 'reverse')}</div>
       )}
 
       <BoardBox>
@@ -192,14 +193,14 @@ export function PuzzleView({ puzzle, env, onMistake, onHint, onDone }: Props) {
       </BoardBox>
 
       <div className="puzzle-tools">
-        <button className="btn ghost small" onClick={reset} disabled={revealing || s === start.current} data-testid="reset">↺ Reset</button>
+        <button className="btn ghost small" onClick={reset} disabled={revealing || s === start.current} data-testid="reset"><Icon name="rotate-ccw" size={15} /> Reset</button>
         <button className="btn ghost small" onClick={env.onToggleBoard} data-testid="learn-toggle-board">{env.boardMode === '3d' ? '2D board' : '3D board'}</button>
       </div>
 
       {verdict && (
         <div className={`feedback ${verdict.ok ? 'good' : 'bad'}`} data-testid={verdict.ok ? 'feedback-correct' : 'feedback-wrong'} role="status">
           <div className="feedback-head">
-            <span className="feedback-icon">{verdict.ok ? '✓' : '✕'}</span>
+            <span className="feedback-icon"><Icon name={verdict.ok ? 'check' : 'x'} size={18} strokeWidth={3} /></span>
             <b>{verdict.ok ? (revealed ? 'Here’s one way' : praise) : 'Not quite'}</b>
           </div>
           <p><Rich text={verdict.ok ? puzzle.explain : verdict.reason ?? 'That didn’t reach the goal.'} /></p>

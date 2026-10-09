@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { RatingPoint } from '../../net/protocol';
+import { Icon } from '../icons';
 
 /** Rating over time (one point per rated game), drawn as an SVG line with a soft area fill. */
 export function RatingChart({ points, height = 150 }: { points: RatingPoint[]; height?: number }) {
@@ -25,7 +26,7 @@ export function RatingChart({ points, height = 150 }: { points: RatingPoint[]; h
   if (!geo) {
     return (
       <div className="rating-chart empty" data-testid="rating-chart">
-        <span>📈</span>
+        <span><Icon name="trend-up" size={28} /></span>
         <p>Play rated games to draw your rating chart.</p>
       </div>
     );
@@ -60,7 +61,7 @@ export function RatingChart({ points, height = 150 }: { points: RatingPoint[]; h
       </svg>
       <div className="rc-legend">
         <span>{points.length - 1} rated game{points.length === 2 ? '' : 's'}</span>
-        <b className={diff >= 0 ? 'up' : 'down'}>{diff >= 0 ? '▲' : '▼'} {Math.abs(diff)}</b>
+        <b className={diff >= 0 ? 'up' : 'down'}><Icon name={diff >= 0 ? 'trend-up' : 'trend-down'} size={15} label={diff >= 0 ? 'Rating up' : 'Rating down'} /> {Math.abs(diff)}</b>
       </div>
     </div>
   );

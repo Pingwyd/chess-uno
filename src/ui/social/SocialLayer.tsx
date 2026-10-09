@@ -5,6 +5,7 @@ import { Avatar } from './Avatar';
 import { client, useOnline } from './useOnline';
 import { buzz, sfx } from '../sound';
 import './social.css';
+import { Icon, asIcon } from '../icons';
 
 /**
  * In-app notifications on every screen: incoming friend challenges (accept / decline with a
@@ -19,10 +20,10 @@ export function SocialLayer({ onAccept, onOpenFriends }: { onAccept: () => void;
       {ch && <ChallengeCard key={ch.id} ch={ch} more={view.challenges.length - 1} offset={client.offset} onAccept={() => { onAccept(); client.replyChallenge(ch.id, true); }} />}
       {view.notices.map((n) => (
         <div key={n.id} className="notice" role="status" data-testid="notice">
-          <span className="notice-icon">{n.icon}</span>
+          <span className="notice-icon"><Icon name={asIcon(n.icon)} size={20} /></span>
           <span className="notice-text">{n.text}</span>
           {n.action === 'friends' && <button className="btn tiny" onClick={() => { client.dismiss(n.id); onOpenFriends(); }}>View</button>}
-          <button className="notice-x" aria-label="Dismiss" onClick={() => client.dismiss(n.id)}>✕</button>
+          <button className="notice-x" aria-label="Dismiss" onClick={() => client.dismiss(n.id)}><Icon name="x" size={16} /></button>
         </div>
       ))}
     </div>
@@ -40,7 +41,7 @@ function ChallengeCard({ ch, more, offset, onAccept }: { ch: ChallengeInfo; more
         <Avatar name={ch.from.name} avatar={ch.from.avatar} size={48} />
         <div className="cc-text">
           <b>{ch.from.name} <small>{ch.from.rating}</small></b>
-          <span>challenges you to a casual game ⚔</span>
+          <span>challenges you to a casual game</span>
         </div>
         <span className="cc-timer" data-testid="challenge-timer">{countdown(ch.expiresAt - now)}</span>
       </div>

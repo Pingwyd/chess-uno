@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { LiveGame } from '../../net/protocol';
 import { Avatar } from './Avatar';
 import { client, useOnline } from './useOnline';
+import { Icon } from '../icons';
 
 type Filter = 'all' | 'rated' | 'casual' | 'friends';
 
@@ -30,7 +31,7 @@ export function LiveGames({ onWatch }: { onWatch: (code: string) => void }) {
       <div className="fchips" role="radiogroup" aria-label="Filter live games">
         {filters.map((f) => (
           <button key={f} role="radio" aria-checked={filter === f} className={`fchip ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)} data-testid={`live-filter-${f}`}>
-            {f === 'all' ? 'All' : f === 'rated' ? 'Rated' : f === 'casual' ? 'Casual' : '★ Friends'}
+            {f === 'all' ? 'All' : f === 'rated' ? 'Rated' : f === 'casual' ? 'Casual' : <><Icon name="star" size={14} /> Friends</>}
           </button>
         ))}
       </div>
@@ -54,11 +55,11 @@ function LiveRow({ g, now, onWatch }: { g: LiveGame; now: number; onWatch: (code
         <b><span>{a.name}</span> <small>{a.rating}</small> <em>vs</em> <span>{b.name}</span> <small>{b.rating}</small></b>
         <small>
           {g.rated ? <span className="rated-tag">RATED</span> : <span className="casual-tag">CASUAL</span>}
-          {g.friend && <span className="friend-tag">★ FRIEND</span>}
+          {g.friend && <span className="friend-tag"><Icon name="star" size={11} /> FRIEND</span>}
           {' '}Turn {g.turn} · {ago(g.startedAt, now)}{g.rated ? ' · 1-turn delay' : ''}
         </small>
       </span>
-      <span className="lr-watch"><span className="lr-eye">👁 {g.spectators}</span><span className="lr-go">Watch ›</span></span>
+      <span className="lr-watch"><span className="lr-eye" aria-label={`${g.spectators} watching`}><Icon name="eye" size={14} /> {g.spectators}</span><span className="lr-go">Watch <Icon name="chevron-right" size={14} /></span></span>
     </button>
   );
 }

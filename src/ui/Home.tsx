@@ -10,6 +10,7 @@ import { localDay, nextLesson, pathOrder, streak, utcDay } from '../learn/progre
 import type { LearnTab } from './learn/LearnScreen';
 import { RecentGames, type OpenReplay } from './RecentGames';
 import { HowToPlay } from './HowToPlay';
+import { Icon } from './icons';
 
 /** Home stays focused: play modes, Learn and recent games. Profile, settings, social and rankings live in the app nav. */
 interface Props {
@@ -52,14 +53,14 @@ export function Home({ pieceSet, onStart, onOnline, onLearn, onReplay }: Props) 
           <span className="logo-uno">UNO</span>
         </h1>
         <p className="tagline">Draw a card. Make that many moves. Outwit the deck.</p>
-        <button className="link-btn how-link" onClick={() => setRules(true)} data-testid="how-to-play">How to play ›</button>
+        <button className="link-btn how-link" onClick={() => setRules(true)} data-testid="how-to-play">How to play <Icon name="chevron-right" size={15} /></button>
       </div>
 
       <LearnCard progress={progress} onLearn={onLearn} />
 
       <div className="modes">
         <button className="mode-card mode-pass" onClick={() => onStart({ mode: 'pass', botLevel: 'medium', humanColor: 'w' })} data-testid="mode-pass">
-          <div className="mode-icon">⇅</div>
+          <div className="mode-icon"><Icon name="arrow-up-down" size={26} /></div>
           <div>
             <h2>Pass &amp; Play</h2>
             <p>Two players, one device, face to face. Works offline.</p>
@@ -68,7 +69,7 @@ export function Home({ pieceSet, onStart, onOnline, onLearn, onReplay }: Props) 
 
         <div className="mode-card mode-bot">
           <div className="mode-head">
-            <div className="mode-icon">⚙</div>
+            <div className="mode-icon"><Icon name="bot" size={26} /></div>
             <div>
               <h2>Vs Bot</h2>
               <p>The bot plans whole multi-move turns.</p>
@@ -93,7 +94,7 @@ export function Home({ pieceSet, onStart, onOnline, onLearn, onReplay }: Props) 
         </div>
 
         <button className="mode-card mode-online" onClick={onOnline} data-testid="mode-online">
-          <div className="mode-icon">◎</div>
+          <div className="mode-icon"><Icon name="globe" size={26} /></div>
           <div>
             <h2>Online</h2>
             <p>Quick Match or invite a friend by link or code.</p>
@@ -124,16 +125,16 @@ function LearnCard({ progress, onLearn }: { progress: ReturnType<typeof useProgr
   return (
     <section className="learn-home" data-testid="learn-card">
       <button className="learn-home-main" onClick={() => onLearn('path')} data-testid="open-learn">
-        <div className="learn-home-icon">🎓</div>
+        <div className="learn-home-icon"><Icon name="graduation-cap" size={30} /></div>
         <div className="learn-home-text">
           <h2>Learn</h2>
           <p>{next ? `${done ? 'Continue' : 'Start'}: ${lessonTitle(next)}` : 'Path complete — ranked unlocked!'}</p>
           <div className="learn-home-meter"><div style={{ width: `${(done / total) * 100}%` }} /></div>
-          <small>{done}/{total} lessons · ⚡ {progress.xp} XP · 🔥 {st} day{st === 1 ? '' : 's'}</small>
+          <small className="learn-home-stats"><span>{done}/{total} lessons</span><span><Icon name="zap" size={13} /> {progress.xp} XP</span><span><Icon name="flame" size={13} /> {st} day{st === 1 ? '' : 's'}</span></small>
         </div>
       </button>
       <button className={`learn-home-daily ${dailyDone ? 'done' : ''}`} onClick={() => onLearn('daily')} data-testid="open-daily">
-        <span>{dailyDone ? '✓' : '📅'}</span>
+        <span><Icon name={dailyDone ? 'check' : 'calendar'} size={28} /></span>
         <b>Daily puzzle</b>
         <small>{dailyDone ? 'Solved' : '+20 XP'}</small>
       </button>
