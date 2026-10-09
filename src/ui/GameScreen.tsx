@@ -9,7 +9,8 @@ import type { CardKind } from '../rules/cards';
 import type { LastMoveAnim } from './Board';
 import { PlayerZone } from './PlayerZone';
 import { CardBack, CardFace } from './Card';
-import { useGame, type GameSetup, BOT_NAMES } from './useGame';
+import { useGame, type GameSetup, BOT_NAMES, rematchSetup } from './useGame';
+import type { RematchState } from '../net/online';
 import { LocalTransport, type GameTransport } from '../net/transport';
 import { newRecordId, type GameRecord } from '../replay/record';
 import { saveGame } from '../replay/store';
@@ -31,6 +32,10 @@ export interface OnlineBinding {
   onEmote: (e: EmoteId) => void;
   /** Back to the online lobby (only offered when the game is over or when spectating). */
   onLeave: () => void;
+  /** Rematch offer for this finished game (null when none is open). */
+  rematch?: RematchState | null;
+  onOfferRematch?: () => void;
+  onDeclineRematch?: () => void;
 }
 
 interface Props {
@@ -53,10 +58,12 @@ const says = (name: string, one: string, you: string) => `${name} ${name === 'Yo
 
 export function GameScreen(props: Props) {
   const [gameKey, setGameKey] = useState(0);
+  // Local rematches swap colours (vs bot: your side flips; Pass & Play: the players swap seats).
+  const [local, setLocal] = useState(props.setup);
   if (props.online) {
-    return <Game key={props.online.snap.gameId} {...props} gameKey={0} onRematch={props.online.onLeave} />;
+    return <Game key={props.online.snap.gameId} {...props} gameKey={0} onRematch={props.online.onOfferRematch ?? props.online.onLeave} />;
   }
-  return <Game key={gameKey} {...props} gameKey={gameKey} onRematch={() => setGameKey((k) => k + 1)} />;
+  return <Game key={gameKey} {...props} setup={local} gameKey={gameKey} onRematch={() => { setLocal(rematchSetup); setGameKey((k) => k + 1); }} />;
 }
 
 function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, onRematch, online, onReview }: Props & { gameKey: number; onRematch: () => void }) {
@@ -528,7 +535,9 @@ function GameOver({ state, result, pass, onRematch, onHome, online, onReview }: 
           {info && <> · deck seed <span className="mono">{info.seed}</span></>}
         </p>
         <div className="panel-actions">
-          <button className="btn primary" onClick={onRematch}>{online ? 'New game' : 'Rematch'} <Icon name="arrow-right" size={18} /></button>
+          {online && viewer !== null ? <OnlineRematch online={online} viewer={viewer} oppName={state.players[(1 - viewer) as PlayerId].name} />
+            : online ? <button className="btn primary" onClick={online.onLeave}>New game <Icon name="arrow-right" size={18} /></button>
+            : <button className="btn primary" onClick={onRematch} data-testid="rematch">Rematch <Icon name="rotate-ccw" size={18} /></button>}
           {onReview && (
             <button className="btn review-btn" onClick={onReview} data-testid="review-game">
               <Icon name="review" size={18} /> Review
@@ -544,6 +553,40 @@ function GameOver({ state, result, pass, onRematch, onHome, online, onReview }: 
       {pass && panel(1, true)}
       {panel(online ? online.snap.you : 0, false)}
     </div>
+  );
+}
+
+/** Online game-over actions: offer / accept / decline a rematch (colours swap), or go back for a new game. */
+function OnlineRematch({ online, viewer, oppName }: { online: OnlineBinding; viewer: PlayerId; oppName: string }) {
+  const r = online.rematch ?? null;
+  const mine = r?.status === 'offered' && r.by === viewer;
+  const theirs = r?.status === 'offered' && r.by !== viewer;
+  const refused = r && r.status !== 'offered' && r.by !== viewer;
+  const newGame = <button className="btn" onClick={online.onLeave} data-testid="new-game">New game</button>;
+  if (theirs) {
+    return (
+      <>
+        <p className="rematch-note" data-testid="rematch-asked"><Icon name="rotate-ccw" size={16} /> {oppName} wants a rematch. Colours swap.</p>
+        <button className="btn primary" onClick={online.onOfferRematch} data-testid="rematch-accept">Accept rematch <Icon name="check" size={18} /></button>
+        <button className="btn" onClick={online.onDeclineRematch} data-testid="rematch-decline">Decline</button>
+      </>
+    );
+  }
+  if (mine) {
+    return (
+      <>
+        <p className="rematch-note" data-testid="rematch-waiting"><Icon name="hourglass" size={16} /> Rematch offered. Waiting for {oppName}…</p>
+        <button className="btn" onClick={online.onDeclineRematch} data-testid="rematch-withdraw">Withdraw</button>
+        {newGame}
+      </>
+    );
+  }
+  return (
+    <>
+      {refused && <p className="rematch-note muted" data-testid="rematch-refused">{r!.status === 'declined' ? `${oppName} declined the rematch.` : `${oppName} left.`}</p>}
+      {!refused && <button className="btn primary" onClick={online.onOfferRematch} data-testid="rematch">Rematch <Icon name="rotate-ccw" size={18} /></button>}
+      <button className={`btn ${refused ? 'primary' : ''}`} onClick={online.onLeave} data-testid="new-game">New game {refused && <Icon name="arrow-right" size={18} />}</button>
+    </>
   );
 }
 

@@ -6,6 +6,7 @@ import { askBot } from '../engine/botClient';
 import type { BotLevel } from '../engine/bot';
 
 export type GameMode = 'pass' | 'bot' | 'online';
+import { DEFAULT_TC, TC_MS, type TimeControl } from '../rules/timeControl';
 
 export interface GameSetup {
   mode: GameMode;
@@ -14,6 +15,15 @@ export interface GameSetup {
   humanColor: Color;
   names?: [string, string];
   seed?: number;
+  /** Clock (defaults to rapid, 10 minutes). */
+  tc?: TimeControl;
+}
+
+/** Next local game after "Rematch": same mode, level and clock, colours swapped, fresh deck. */
+export function rematchSetup(s: GameSetup): GameSetup {
+  if (s.mode === 'bot') return { ...s, seed: undefined, humanColor: s.humanColor === 'w' ? 'b' : 'w' };
+  if (s.mode === 'pass') return { ...s, seed: undefined, names: [s.names?.[1] ?? 'Player 2', s.names?.[0] ?? 'Player 1'] };
+  return s;
 }
 
 export const BOT_NAMES: Record<BotLevel, string> = { easy: 'Pawn Bot', medium: 'Knight Bot', hard: 'Rook Bot' };
@@ -23,6 +33,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export function useGame(setup: GameSetup, gameKey: number, external?: GameTransport) {
   const transport = useMemo<GameTransport>(() => external ?? new LocalTransport({
     seed: setup.seed,
+    clockMs: TC_MS[setup.tc ?? DEFAULT_TC],
     player0Color: setup.mode === 'bot' ? setup.humanColor : 'w',
     players: setup.mode === 'bot'
       ? [{ name: 'You', kind: 'human' }, { name: BOT_NAMES[setup.botLevel], kind: 'bot' }]

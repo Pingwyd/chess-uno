@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CHALLENGE_TTL_MS, type ChallengeInfo } from '../../net/protocol';
+import { TC_SHORT, asTimeControl } from '../../rules/timeControl';
 import { countdown } from './countdown';
 import { Avatar } from './Avatar';
 import { client, useOnline } from './useOnline';
@@ -41,7 +42,7 @@ function ChallengeCard({ ch, more, offset, onAccept }: { ch: ChallengeInfo; more
         <Avatar name={ch.from.name} avatar={ch.from.avatar} size={48} />
         <div className="cc-text">
           <b>{ch.from.name} <small>{ch.from.rating}</small></b>
-          <span>challenges you to a casual game</span>
+          <span>challenges you to a casual {TC_SHORT[asTimeControl(ch.tc)]} game</span>
         </div>
         <span className="cc-timer" data-testid="challenge-timer">{countdown(ch.expiresAt - now)}</span>
       </div>

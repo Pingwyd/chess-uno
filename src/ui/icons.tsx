@@ -5,9 +5,9 @@
  */
 import type { CSSProperties } from 'react';
 import {
-  ArrowDown, ArrowLeftRight, ArrowRight, ArrowUpDown, ArrowUpRight, Award, Ban, Bird, Bot, BookOpen, Calendar, CalendarCheck,
+  ArrowDown, ArrowLeftRight, ArrowRight, ArrowUpDown, ArrowUpRight, Award, Ban, Bell, BellOff, Bird, Bot, BookOpen, Calendar, CalendarCheck,
   Castle, Cat, Check, ChessBishop, ChessKing, ChessKnight, ChessPawn, ChessQueen, ChessRook, ChevronDown, ChevronLeft,
-  ChevronRight, ChevronUp, CloudCheck, CodeXml, Crown, Ellipsis, ExternalLink, Eye, FastForward, Flag, Flame, Footprints, Frown,
+  ChevronRight, ChevronUp, CloudCheck, CodeXml, Crown, Ellipsis, ExternalLink, Eye, FastForward, Flag, FlaskConical, Flame, Footprints, Frown,
   Gem, Gift, Globe, GraduationCap, Hand, Handshake, Hourglass, House, KeyRound, Laugh, Layers, Lightbulb, Link, Lock, Medal,
   Menu, MessageCircle, Monitor, Moon, PartyPopper, Pause, Pencil, Play, Radio, Recycle, Rewind, Rocket, RotateCcw, RotateCw, Scale, Scissors,
   ScanSearch, ScrollText, Search, Settings, Shield, SkipBack, SkipForward, Smartphone, Snowflake, Spade, Sparkles, Star, StepBack,
@@ -17,11 +17,11 @@ import {
 
 export const ICONS = {
   'arrow-down': ArrowDown, 'arrow-right': ArrowRight, 'arrow-up-right': ArrowUpRight, 'arrow-up-down': ArrowUpDown,
-  reverse: ArrowLeftRight, skip: Ban, award: Award, bird: Bird, bot: Bot, book: BookOpen, calendar: Calendar, 'calendar-check': CalendarCheck,
+  reverse: ArrowLeftRight, skip: Ban, award: Award, bell: Bell, 'bell-off': BellOff, bird: Bird, bot: Bot, book: BookOpen, calendar: Calendar, 'calendar-check': CalendarCheck,
   castle: Castle, cat: Cat, check: Check, bishop: ChessBishop, king: ChessKing, knight: ChessKnight, pawn: ChessPawn, queen: ChessQueen,
   rook: ChessRook, 'chevron-down': ChevronDown, 'chevron-left': ChevronLeft, 'chevron-right': ChevronRight, 'chevron-up': ChevronUp,
   'cloud-check': CloudCheck, code: CodeXml, crown: Crown, more: Ellipsis, external: ExternalLink, eye: Eye, 'fast-forward': FastForward,
-  flag: Flag, flame: Flame, footprints: Footprints, frown: Frown, gem: Gem, gift: Gift, globe: Globe, 'graduation-cap': GraduationCap,
+  flag: Flag, flask: FlaskConical, flame: Flame, footprints: Footprints, frown: Frown, gem: Gem, gift: Gift, globe: Globe, 'graduation-cap': GraduationCap,
   hand: Hand, handshake: Handshake, hourglass: Hourglass, house: House, key: KeyRound, laugh: Laugh, layers: Layers, lightbulb: Lightbulb,
   link: Link, lock: Lock, medal: Medal, menu: Menu, monitor: Monitor, sun: Sun, chat: MessageCircle, moon: Moon, party: PartyPopper, pause: Pause, pencil: Pencil,
   play: Play, radio: Radio, recycle: Recycle, rewind: Rewind, rocket: Rocket, 'rotate-ccw': RotateCcw, 'rotate-cw': RotateCw, scale: Scale,

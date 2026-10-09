@@ -4,6 +4,8 @@ import { HAS_SERVER } from '../../net/online';
 import { Avatar, presenceText } from '../social/Avatar';
 import { client, useOnline } from '../social/useOnline';
 import { Icon } from '../icons';
+import { ClockPicker } from '../ClockPicker';
+import { getSettings } from './store';
 
 const ORDER = { playing: 0, online: 1, offline: 2 } as const;
 
@@ -36,7 +38,7 @@ export function FriendsTab({ onSignUp, onChallenge, onWatch }: {
   const f = view.friends;
   const friends = [...(f?.friends ?? [])].sort((a, b) => ORDER[a.presence?.status ?? 'offline'] - ORDER[b.presence?.status ?? 'offline'] || a.name.localeCompare(b.name));
   const onlineN = friends.filter((x) => x.presence && x.presence.status !== 'offline').length;
-  const challenge = (fr: FriendInfo) => { if (client.challenge(fr.id)) onChallenge(); };
+  const challenge = (fr: FriendInfo) => { if (client.challenge(fr.id, getSettings().timeControl)) onChallenge(); };
 
   return (
     <div className="friends" data-testid="friends">
@@ -59,6 +61,7 @@ export function FriendsTab({ onSignUp, onChallenge, onWatch }: {
         </div>
         {f === null && <p className="prof-note">Loading…</p>}
         {f && !friends.length && <p className="prof-note">No friends yet. Search for a player above and send a request.</p>}
+        {friends.length > 0 && <ClockPicker label="Challenge clock" />}
         {friends.map((u) => <FriendRow key={u.id} u={u} canChallenge={view.status === 'online'} onChallenge={() => challenge(u)} onWatch={onWatch} />)}
       </section>
       {!!f?.outgoing.length && (

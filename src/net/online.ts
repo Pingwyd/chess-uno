@@ -4,7 +4,8 @@
  * GameTransport seam as local games. The server is authoritative; the client
  * only renders the snapshots it receives.
  */
-import type { GameAction, GameState } from '../rules/game';
+import type { GameAction, GameState, PlayerId } from '../rules/game';
+import type { TimeControl } from '../rules/timeControl';
 import type { GameTransport } from './transport';
 import type {
   ChallengeInfo, ChatMessage, ClientMsg, EmoteId, FriendInfo, FriendsList, LiveGame, ProfileInfo, PublicUser, Relation, RoomSnapshot, ServerMsg, UserSearchHit,
@@ -53,8 +54,11 @@ export const storedToken = () => localStorage.getItem(TOKEN_KEY);
 export type ConnStatus = 'idle' | 'connecting' | 'online' | 'offline';
 export type LobbyState =
   | { kind: 'idle' }
-  | { kind: 'queued'; rated: boolean; since: number }
-  | { kind: 'waiting'; code: string; invitee?: FriendInfo; since?: number };
+  | { kind: 'queued'; rated: boolean; since: number; tc?: TimeControl }
+  | { kind: 'waiting'; code: string; invitee?: FriendInfo; since?: number; tc?: TimeControl };
+
+/** Rematch offer state for the finished game on screen. */
+export interface RematchState { code: string; by: PlayerId; status: 'offered' | 'declined' | 'cancelled' }
 
 /** A short in-app notice (friend request, challenge declined…). */
 export interface Notice {
@@ -80,6 +84,7 @@ export interface OnlineView {
   /** Games in progress, while subscribed (Live games list). */
   live: LiveGame[] | null;
   notices: Notice[];
+  rematch: RematchState | null;
   /** Bumps on every change (for React subscriptions). */
   version: number;
 }
@@ -99,7 +104,7 @@ export class OnlineClient {
   offset = 0;
   private liveSubs = 0;
   private noticeSeq = 1;
-  view: OnlineView = { status: 'idle', user: null, lobby: { kind: 'idle' }, snap: null, chat: [], error: null, friends: null, challenges: [], live: null, notices: [], version: 0 };
+  view: OnlineView = { status: 'idle', user: null, lobby: { kind: 'idle' }, snap: null, chat: [], error: null, friends: null, challenges: [], live: null, notices: [], rematch: null, version: 0 };
 
   subscribe(fn: () => void) {
     this.listeners.add(fn);
@@ -211,9 +216,9 @@ export class OnlineClient {
   }
 
   /** Challenge a friend: the server opens a private room (you wait in it) and pings them. */
-  challenge(userId: string) {
+  challenge(userId: string, tc?: TimeControl) {
     if (this.view.status !== 'online') { this.flashError('Not connected to the server'); return false; }
-    return this.send({ t: 'challenge', userId });
+    return this.send({ t: 'challenge', userId, tc });
   }
 
   replyChallenge(id: string, accept: boolean) {
@@ -348,14 +353,14 @@ export class OnlineClient {
         return;
       }
       case 'queued':
-        this.update({ lobby: { kind: 'queued', rated: msg.rated, since: Date.now() } });
+        this.update({ lobby: { kind: 'queued', rated: msg.rated, since: Date.now(), tc: msg.tc } });
         return;
       case 'queueCancelled':
       case 'left':
         this.update({ lobby: { kind: 'idle' } });
         return;
       case 'roomCreated':
-        this.update({ lobby: { kind: 'waiting', code: msg.code, invitee: msg.invitee, since: Date.now() }, snap: null, chat: [] });
+        this.update({ lobby: { kind: 'waiting', code: msg.code, invitee: msg.invitee, since: Date.now(), tc: msg.tc }, snap: null, chat: [], rematch: null });
         return;
       case 'presence': {
         const f = this.view.friends;
@@ -388,9 +393,12 @@ export class OnlineClient {
       case 'room': {
         const fresh = !this.view.snap || this.view.snap.code !== msg.snap.code;
         if (Math.abs(msg.snap.serverNow - Date.now() - this.offset) > 2000) this.offset = msg.snap.serverNow - Date.now();
-        this.update({ snap: msg.snap, lobby: { kind: 'idle' }, ...(fresh ? { chat: [] } : {}) });
+        this.update({ snap: msg.snap, lobby: { kind: 'idle' }, ...(fresh ? { chat: [], rematch: null } : {}) });
         return;
       }
+      case 'rematch':
+        if (this.view.snap?.code === msg.code) this.update({ rematch: { code: msg.code, by: msg.by, status: msg.status } });
+        return;
       case 'chatHistory':
         this.update({ chat: msg.msgs });
         return;
@@ -417,9 +425,14 @@ export class OnlineClient {
 
   // ------------------------------------------------------------ lobby actions
 
-  quickMatch() { this.send({ t: 'queue' }); }
+  quickMatch(tc?: TimeControl) { this.send({ t: 'queue', tc }); }
   cancelQueue() { this.send({ t: 'cancelQueue' }); }
-  createRoom() { this.send({ t: 'createRoom' }); }
+  createRoom(tc?: TimeControl) { this.send({ t: 'createRoom', tc }); }
+
+  /** Offer a rematch for the finished game on screen (accepts if the opponent already offered). */
+  offerRematch() { const s = this.view.snap; if (s) this.send({ t: 'rematch', code: s.code }); }
+  /** Decline the opponent's offer, or withdraw your own. */
+  declineRematch() { const s = this.view.snap; if (s) this.send({ t: 'rematchDecline', code: s.code }); }
 
   joinRoom(code: string) {
     if (this.view.status !== 'online') { this.pendingAfterHello = { t: 'joinRoom', code }; this.connect(); return; }
@@ -434,7 +447,7 @@ export class OnlineClient {
   /** Leave the waiting room / queue / finished game view and return to the lobby. */
   leave() {
     this.send({ t: 'leave' });
-    this.update({ snap: null, chat: [], lobby: { kind: 'idle' } });
+    this.update({ snap: null, chat: [], lobby: { kind: 'idle' }, rematch: null });
   }
 
   sendChat(text: string) { if (text.trim()) this.send({ t: 'chat', text }); }

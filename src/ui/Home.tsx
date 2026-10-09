@@ -11,6 +11,9 @@ import type { LearnTab } from './learn/LearnScreen';
 import { RecentGames, type OpenReplay } from './RecentGames';
 import { HowToPlay } from './HowToPlay';
 import { Icon } from './icons';
+import { ClockPicker } from './ClockPicker';
+import { useSettings } from './settings/store';
+import { TC_SHORT } from '../rules/timeControl';
 
 /** Home stays focused: play modes, Learn and recent games. Profile, settings, social and rankings live in the app nav. */
 interface Props {
@@ -32,10 +35,11 @@ export function Home({ pieceSet, onStart, onOnline, onLearn, onReplay }: Props) 
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
   const [rules, setRules] = useState(false);
+  const { timeControl: tc } = useSettings();
 
   const startBot = () => {
     const humanColor: Color = side === 'random' ? (Math.random() < 0.5 ? 'w' : 'b') : side;
-    onStart({ mode: 'bot', botLevel: level, humanColor });
+    onStart({ mode: 'bot', botLevel: level, humanColor, tc });
   };
 
   const levelName = LEVELS.find((l) => l.id === level)!.name;
@@ -77,14 +81,15 @@ export function Home({ pieceSet, onStart, onOnline, onLearn, onReplay }: Props) 
             </button>
           ))}
         </div>
+        <ClockPicker label="Clock (all games)" />
         <button className="btn primary wide play-go" onClick={startBot} data-testid="start-bot">Play vs {levelName} Bot <Icon name="arrow-right" size={20} /></button>
       </section>
 
       <div className="home-side">
         <div className="rows" role="list">
-          <button className="row mode-pass" onClick={() => onStart({ mode: 'pass', botLevel: 'medium', humanColor: 'w' })} data-testid="mode-pass" role="listitem">
+          <button className="row mode-pass" onClick={() => onStart({ mode: 'pass', botLevel: 'medium', humanColor: 'w', tc })} data-testid="mode-pass" role="listitem">
             <span className="row-icon"><Icon name="arrow-up-down" size={20} /></span>
-            <span className="row-main"><b>Pass &amp; Play</b><small>Two players, one device. Works offline.</small></span>
+            <span className="row-main"><b>Pass &amp; Play</b><small>Two players, one device. {TC_SHORT[tc]} each.</small></span>
             <Icon name="chevron-right" size={18} className="chev" />
           </button>
           <button className="row mode-online" onClick={onOnline} data-testid="mode-online" role="listitem">
