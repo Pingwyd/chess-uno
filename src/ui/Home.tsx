@@ -10,6 +10,11 @@ import { OUTLINE_SHAPE as PATH_SHAPE, lessonTitle } from '../learn/outline';
 import { localDay, nextLesson, pathOrder, streak, utcDay } from '../learn/progress';
 import type { LearnTab } from './learn/LearnScreen';
 import { RecentGames, type OpenReplay } from './RecentGames';
+import { HowToPlay } from './HowToPlay';
+import type { SettingsTab } from './settings/SettingsScreen';
+import { useSettings } from './settings/store';
+import { Avatar } from './social/Avatar';
+import { useOnline } from './social/useOnline';
 
 interface Props {
   pieceSet: PieceSet;
@@ -22,6 +27,7 @@ interface Props {
   onOnline: () => void;
   onLearn: (tab: LearnTab) => void;
   onReplay: OpenReplay;
+  onSettings: (tab: SettingsTab) => void;
 }
 
 const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
@@ -30,8 +36,11 @@ const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
   { id: 'hard', name: 'Rook', blurb: 'Hard', piece: 'R' },
 ];
 
-export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn, onReplay }: Props) {
+export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn, onReplay, onSettings }: Props) {
   const progress = useProgress();
+  const view = useOnline();
+  const settings = useSettings();
+  const pending = (view.friends?.incoming.length ?? 0);
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
   const [rules, setRules] = useState(false);
@@ -43,6 +52,14 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
 
   return (
     <div className="home" data-testid="home">
+      <div className="home-top">
+        <button className="home-me" onClick={() => onSettings('profile')} aria-label="Profile" data-testid="open-profile">
+          <Avatar name={view.user?.name ?? 'You'} avatar={view.user?.avatar ?? settings.avatar} size={38} />
+          {view.user && !view.user.guest && <span className="home-me-text"><b>{view.user.name}</b><small>{view.user.rating}</small></span>}
+          {pending > 0 && <i className="tab-badge">{pending}</i>}
+        </button>
+        <button className="icon-btn gear" onClick={() => onSettings('settings')} aria-label="Settings" data-testid="open-settings">⚙</button>
+      </div>
       <div className="hero">
         <div className="hero-art">
           <div className="hero-card hc1"><CardFace kind="3" size="md" /></div>
@@ -122,16 +139,7 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
       {rules && (
         <div className="overlay" onClick={() => setRules(false)}>
           <div className="panel rules" onClick={(e) => e.stopPropagation()}>
-            <h2>How to play</h2>
-            <ul>
-              <li><b>Normal chess</b>, White first, 10 minutes each. Run out of time and you lose.</li>
-              <li>Start each turn by <b>drawing a card</b>: a <b>1, 2 or 3</b> means that many moves in a row. 3s are rare: the 52-card deck has 19 ones, 18 twos and just 5 threes (about 1.7 moves a turn on average), plus 6 Skip and 4 Reverse.</li>
-              <li><b>Giving check ends your turn</b> immediately. Set up quietly, then check on your last move.</li>
-              <li>White's very first turn is capped at <b>1 move</b>.</li>
-              <li><b>Skip</b> and <b>Reverse</b> go into your hand (max 2). Play one at the start of a turn, before drawing.</li>
-              <li><b>Skip:</b> take your turn, then your opponent's next turn is skipped. Check cancels Skip.</li>
-              <li><b>Reverse:</b> swap sides with your opponent (uses your turn). Unlocks after 5 turns each, no Reverse straight back, and <b>only one Reverse per player per game</b>. After yours is used, any Reverse you draw is discarded and you draw again.</li>
-            </ul>
+            <HowToPlay />
             <button className="btn primary" onClick={() => setRules(false)}>Got it</button>
           </div>
         </div>

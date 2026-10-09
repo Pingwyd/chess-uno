@@ -262,6 +262,88 @@ Every finished game is saved and can be replayed and reviewed — vs bot, Pass &
 |---|---|
 | ![](docs/screenshots/review-recent-home.jpg) | ![](docs/screenshots/review-recent-all.jpg) |
 
+## Settings, profile, friends and live games
+
+Open it from the **avatar** (profile) or **gear** (settings) at the top of Home, or with `?settings`. There are three tabs.
+
+- **Profile:**
+  - avatar picker (16 symbols, or your initial) and display-name edit;
+  - rating with a **rating-history chart** (rated games, from `GET /api/my/profile`);
+  - W/L/D, win rate, current and best win streak;
+  - learning-path badges and the piece-skin selector;
+  - recent games (online and local merged), each linking to its review.
+
+  Guests and offline players get the same profile built from games saved on the device (`src/ui/settings/stats.ts`), plus a "create a free account" prompt.
+- **Friends** (accounts only; guests are asked to sign up):
+  - search players by name;
+  - send, accept, decline or cancel requests, and remove friends;
+  - each friend shows a **live presence** dot: online, in a game or in a rated game;
+  - **Watch** a friend's game, or **Challenge** a friend who is online.
+- **Settings:**
+  - Board: 2D/3D default, piece set, legal-move hints, **confirm moves** (stage a move, then press Play ✓).
+  - Sound: master sound, effects volume, generative ambient music (default off), vibration.
+  - Notifications: placeholder toggles, marked PREVIEW (push is in `BACKLOG.md`).
+  - Reduced motion: system, on or off. It turns off board spins, card flips, piece slides and sparks.
+  - Account: sign in or out, change password, delete account (needs your password and typing DELETE).
+  - About and how to play.
+
+  Device settings live in `localStorage` (`cu.settings`, `src/ui/settings/store.ts`).
+
+**Server** (`server/src/social.ts`, `hub.ts`, `http.ts`; migration `004_social`): adds `users.avatar`, `users.deleted` and a `friendships` table (one row per pair, `pending`/`accepted`).
+
+- **REST:**
+
+  | Method | Path | Notes |
+  |---|---|---|
+  | GET | `/api/users/search?q=` | |
+  | GET | `/api/friends` | Includes presence |
+  | POST | `/api/friends/{request,accept,decline,cancel,remove}` | `{userId}` |
+  | GET | `/api/users/:id/profile`, `/api/my/profile` | |
+  | POST | `/api/profile` | Name and avatar |
+  | POST | `/api/account/password` | |
+  | POST | `/api/account/delete` | |
+  | GET | `/api/leaderboard?scope=friends` | |
+  | GET | `/api/live` | |
+
+  A request to someone who already asked you is accepted automatically. The cap is 200 friends.
+- **WebSocket:**
+  - `presence` updates go to your friends.
+  - `social` events cover requests, accepts, declines, cancels and removals, and show up as in-app notices.
+  - Challenges: `challenge` → `challengeUpdate`.
+  - `live` subscribes to the live-games list. Pushes are throttled to once a second.
+  - With a saved login, the app keeps a background socket open on any screen, so friends see you online and challenges reach you everywhere.
+- **Challenges:**
+  - friends only;
+  - the target must be online and not already in a game;
+  - one outstanding challenge per player.
+
+  A challenge creates a private, unrated room with the friend as the invitee. They get an Accept/Decline card with a 60 s countdown, and accepting seats them and starts the game. A decline, timeout or the challenger leaving closes the room.
+- **Live games** (Online screen):
+  - games in progress, highest average rating first;
+  - friends' games highlighted;
+  - filters: All / Rated / Casual / Friends;
+  - spectator counts, updated live.
+
+  Tapping a game spectates it; rated games keep the one-turn spectator delay. Quick Match games are public. Private rooms (invites and challenges) are listed only for the players and their friends.
+- **Delete account** anonymises the user rather than removing the row: name "Deleted player", email and password cleared, sessions rejected. Friendships and learning progress are deleted. Opponents' game histories and replays stay intact, and the email can be used again. It's blocked while you're in a game.
+- **Tests:**
+  - `server/test/social.test.ts`:
+    - friend lifecycle, search, guest rules, friends leaderboard;
+    - presence and social pushes;
+    - challenge accept/decline/cancel/offline/busy;
+    - live list ordering, privacy, spectators and the delayed ranked view;
+    - profile, rating history, streaks, password change, account deletion.
+  - `tests/social.test.ts`: local stats, avatars, settings store.
+- **Screenshots:** `npx tsx scripts/social-shots.ts`. It starts an in-memory server on 8798 and a preview on 4320, seeds eight accounts with friendships, rated history and live bot-driven games, and writes `screenshots/social-*.png`.
+
+| Settings | Profile + rating chart | Friends + presence | Friend request | Challenge |
+|---|---|---|---|---|
+| ![](docs/screenshots/social-settings.jpg) | ![](docs/screenshots/social-profile.jpg) | ![](docs/screenshots/social-friends.jpg) | ![](docs/screenshots/social-friend-request.jpg) | ![](docs/screenshots/social-challenge.jpg) |
+
+| Challenge sent | Live games | Spectating | Home |
+|---|---|---|---|
+| ![](docs/screenshots/social-challenge-sent.jpg) | ![](docs/screenshots/social-live.jpg) | ![](docs/screenshots/social-spectate.jpg) | ![](docs/screenshots/social-home.jpg) |
+
 ## Rule decisions made for the MVP
 
 These follow `docs/DESIGN.md`. Where the doc left a gap, this is what the code does:
@@ -284,4 +366,4 @@ These follow `docs/DESIGN.md`. Where the doc left a gap, this is what the code d
 
 ## Not in the MVP yet
 
-A leaderboard screen beyond the lobby top 10, seasons, friends lists, rematch offers, draw offers, "try it yourself" from a review position, server-enforced ranked unlock, monetization, and bot levels 4–5 (Bishop and Queen). Online play is groundwork: it hasn't been deployed or load-tested. See the roadmap in `docs/DESIGN.md` §13.
+A leaderboard screen beyond the lobby top 10, seasons, rematch offers, draw offers, "try it yourself" from a review position, server-enforced ranked unlock, monetization, and bot levels 4–5 (Bishop and Queen). Online play is groundwork: it hasn't been deployed or load-tested. See `BACKLOG.md` and the roadmap in `docs/DESIGN.md` §13.

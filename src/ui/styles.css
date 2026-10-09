@@ -592,3 +592,9 @@ button:disabled { cursor: default; }
 .burn-note { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); white-space: nowrap; font-size: 12px; font-weight: 800; color: #ffb3c1; text-shadow: 0 1px 4px #000; }
 .reveal-burned .reveal-card { filter: grayscale(1) brightness(0.6) drop-shadow(0 0 24px rgba(255, 84, 112, 0.6)); }
 .reveal-burned .reveal-label { color: #ffb3c1; }
+
+/* ------------------------------------------------------------ reduced motion (Settings → Accessibility) */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+}
+.reduce-motion .bg-sparks { animation: none !important; }

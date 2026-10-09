@@ -1,0 +1,205 @@
+import { useState } from 'react';
+import { HAS_SERVER } from '../../net/online';
+import { has3D, type BoardMode } from '../BoardView';
+import type { PieceSet } from '../pieces';
+import { previewSfx } from '../sound';
+import { client, useOnline } from '../social/useOnline';
+import { setSettings, useSettings, type MotionPref, type Settings } from './store';
+import { RULES_VERSION } from '../../rules/cards';
+
+export interface PrefsProps {
+  pieceSet: PieceSet;
+  onPieceSet: (p: PieceSet) => void;
+  boardMode: BoardMode;
+  onBoardMode: (m: BoardMode) => void;
+  sound: boolean;
+  onSound: (on: boolean) => void;
+  onAuth: (mode: 'login' | 'signup') => void;
+  onHowTo: () => void;
+}
+
+export function Toggle({ on, onChange, label, sub, testid, disabled }: { on: boolean; onChange: (v: boolean) => void; label: string; sub?: string; testid?: string; disabled?: boolean }) {
+  return (
+    <label className={`set-row ${disabled ? 'disabled' : ''}`}>
+      <span className="set-label"><b>{label}</b>{sub && <small>{sub}</small>}</span>
+      <button type="button" role="switch" aria-checked={on} className={`switch ${on ? 'on' : ''}`} disabled={disabled} onClick={() => onChange(!on)} data-testid={testid}><i /></button>
+    </label>
+  );
+}
+
+function Slider({ value, onChange, label, sub, testid, disabled, onRelease }: { value: number; onChange: (v: number) => void; label: string; sub?: string; testid?: string; disabled?: boolean; onRelease?: () => void }) {
+  return (
+    <div className={`set-row slider-row ${disabled ? 'disabled' : ''}`}>
+      <span className="set-label"><b>{label}</b>{sub && <small>{sub}</small>}</span>
+      <div className="slider">
+        <input type="range" min={0} max={100} step={5} value={Math.round(value * 100)} disabled={disabled} aria-label={label}
+          onChange={(e) => onChange(Number(e.target.value) / 100)} onPointerUp={onRelease} onKeyUp={onRelease} data-testid={testid}
+          style={{ '--fill': `${Math.round(value * 100)}%` } as React.CSSProperties} />
+        <output>{value ? `${Math.round(value * 100)}%` : 'Off'}</output>
+      </div>
+    </div>
+  );
+}
+
+const notifyLabels: Record<keyof Settings['notify'], [string, string]> = {
+  turn: ['Your turn', 'When an online opponent has moved'],
+  challenges: ['Challenges', 'When a friend challenges you'],
+  friends: ['Friend requests', 'New requests and accepted requests'],
+  streak: ['Streak reminders', 'Keep your learning streak alive'],
+};
+
+export function PrefsTab(p: PrefsProps) {
+  const s = useSettings();
+  return (
+    <div className="prefs" data-testid="prefs">
+      <section className="set-card" data-testid="set-board">
+        <h3>Board</h3>
+        <div className="set-row">
+          <span className="set-label"><b>Default board</b><small>{has3D() ? 'You can still switch in a game' : '3D needs WebGL, which this device lacks'}</small></span>
+          <div className="seg seg-small mini-seg">
+            <button className={`seg-btn ${p.boardMode === '2d' ? 'on' : ''}`} onClick={() => p.onBoardMode('2d')} data-testid="set-2d">2D</button>
+            <button className={`seg-btn ${p.boardMode === '3d' ? 'on' : ''}`} onClick={() => p.onBoardMode('3d')} disabled={!has3D()} data-testid="set-3d">3D</button>
+          </div>
+        </div>
+        <div className="set-row">
+          <span className="set-label"><b>Piece set</b></span>
+          <div className="seg seg-small mini-seg">
+            <button className={`seg-btn ${p.pieceSet === 'arcane' ? 'on' : ''}`} onClick={() => p.onPieceSet('arcane')}>Arcane</button>
+            <button className={`seg-btn ${p.pieceSet === 'classic' ? 'on' : ''}`} onClick={() => p.onPieceSet('classic')}>Classic</button>
+          </div>
+        </div>
+        <Toggle label="Legal-move hints" sub="Dots and rings where the selected piece can go" on={s.hints} onChange={(v) => setSettings({ hints: v })} testid="set-hints" />
+        <Toggle label="Confirm moves" sub="Tap a move, then press Play ✓ — no mis-taps" on={s.confirmMoves} onChange={(v) => setSettings({ confirmMoves: v })} testid="set-confirm" />
+      </section>
+
+      <section className="set-card" data-testid="set-sound">
+        <h3>Sound &amp; haptics</h3>
+        <Toggle label="Sound" sub="Master switch for effects and music" on={p.sound} onChange={p.onSound} testid="set-sound-on" />
+        <Slider label="Effects volume" value={s.sfxVolume} onChange={(v) => setSettings({ sfxVolume: v })} onRelease={previewSfx} disabled={!p.sound} testid="set-sfx" />
+        <Slider label="Music" sub="Soft ambient loop" value={s.musicVolume} onChange={(v) => setSettings({ musicVolume: v })} disabled={!p.sound} testid="set-music" />
+        <Toggle label="Vibration" sub={typeof navigator !== 'undefined' && 'vibrate' in navigator ? 'Haptic pulse on turn changes and Reverse' : 'Not supported on this device'} on={s.vibration} onChange={(v) => setSettings({ vibration: v })} testid="set-vibration" />
+      </section>
+
+      <section className="set-card" data-testid="set-notify">
+        <h3>Notifications <span className="soon-tag">PREVIEW</span></h3>
+        <p className="prof-note">Push notifications arrive with the mobile app. Your choices are saved now and will apply then.</p>
+        {(Object.keys(notifyLabels) as (keyof Settings['notify'])[]).map((k) => (
+          <Toggle key={k} label={notifyLabels[k][0]} sub={notifyLabels[k][1]} on={s.notify[k]} onChange={(v) => setSettings({ notify: { ...s.notify, [k]: v } })} testid={`set-notify-${k}`} />
+        ))}
+      </section>
+
+      <section className="set-card" data-testid="set-motion">
+        <h3>Accessibility</h3>
+        <div className="set-row">
+          <span className="set-label"><b>Reduced motion</b><small>Calmer animations: no board spins, card flips or drifting sparks</small></span>
+          <div className="seg seg-small mini-seg">
+            {(['system', 'on', 'off'] as MotionPref[]).map((m) => (
+              <button key={m} className={`seg-btn ${s.reducedMotion === m ? 'on' : ''}`} onClick={() => setSettings({ reducedMotion: m })} data-testid={`set-motion-${m}`}>{m === 'system' ? 'Auto' : m === 'on' ? 'On' : 'Off'}</button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <AccountSection onAuth={p.onAuth} />
+
+      <section className="set-card" data-testid="set-about">
+        <h3>About</h3>
+        <button className="set-link" onClick={p.onHowTo} data-testid="set-howto"><span>📖 How to play</span><i>›</i></button>
+        <a className="set-link" href="https://github.com/Pingwyd/chess-uno" target="_blank" rel="noreferrer"><span>💻 Source code</span><i>↗</i></a>
+        <p className="prof-note about-line">Chess UNO 0.1 · rules v{RULES_VERSION} · {HAS_SERVER ? 'online server connected' : 'offline build'}</p>
+      </section>
+    </div>
+  );
+}
+
+function AccountSection({ onAuth }: { onAuth: (m: 'login' | 'signup') => void }) {
+  const view = useOnline();
+  const u = view.user;
+  const [pw, setPw] = useState(false);
+  const [del, setDel] = useState(false);
+  if (!HAS_SERVER) {
+    return (
+      <section className="set-card" data-testid="set-account">
+        <h3>Account</h3>
+        <p className="prof-note">Accounts arrive with online play. Everything here is saved on this device.</p>
+      </section>
+    );
+  }
+  return (
+    <section className="set-card" data-testid="set-account">
+      <h3>Account</h3>
+      {!u || u.guest ? (
+        <>
+          <p className="prof-note">{u ? <>Playing as guest <b>{u.name}</b>. Sign up to keep a rating, add friends and sync progress — your guest stats carry over.</> : 'Not signed in.'}</p>
+          <div className="panel-actions left">
+            <button className="btn primary small" onClick={() => onAuth('signup')} data-testid="set-signup">Sign up</button>
+            <button className="btn ghost small" onClick={() => onAuth('login')} data-testid="set-login">Log in</button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="set-row"><span className="set-label"><b>{u.name}</b><small>{u.email}</small></span>
+            <button className="btn ghost small" onClick={() => void client.logout()} data-testid="set-logout">Sign out</button></div>
+          <button className="set-link" onClick={() => setPw((v) => !v)} data-testid="set-password"><span>🔑 Change password</span><i>{pw ? '⌃' : '›'}</i></button>
+          {pw && <PasswordForm onDone={() => setPw(false)} />}
+          <button className="set-link danger" onClick={() => setDel(true)} data-testid="set-delete"><span>🗑 Delete account</span><i>›</i></button>
+          {del && <DeleteDialog name={u.name} onClose={() => setDel(false)} />}
+        </>
+      )}
+    </section>
+  );
+}
+
+function PasswordForm({ onDone }: { onDone: () => void }) {
+  const [cur, setCur] = useState('');
+  const [next, setNext] = useState('');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try {
+      await client.changePassword(cur, next);
+      setMsg({ ok: true, text: 'Password changed' });
+      setCur(''); setNext('');
+      setTimeout(onDone, 1200);
+    } catch (x) {
+      setMsg({ ok: false, text: x instanceof Error ? x.message : 'Could not change password' });
+    } finally { setBusy(false); }
+  };
+  return (
+    <form className="auth inline-form" onSubmit={submit} data-testid="password-form">
+      <label>Current password<input type="password" required value={cur} onChange={(e) => setCur(e.target.value)} autoComplete="current-password" /></label>
+      <label>New password <small>(8+ characters)</small><input type="password" required minLength={8} value={next} onChange={(e) => setNext(e.target.value)} autoComplete="new-password" /></label>
+      {msg && <div className={msg.ok ? 'auth-ok' : 'auth-error'}>{msg.text}</div>}
+      <button className="btn primary small" type="submit" disabled={busy}>{busy ? '…' : 'Update password'}</button>
+    </form>
+  );
+}
+
+function DeleteDialog({ name, onClose }: { name: string; onClose: () => void }) {
+  const [typed, setTyped] = useState('');
+  const [password, setPassword] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const go = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    try { await client.deleteAccount(password); onClose(); } catch (x) { setErr(x instanceof Error ? x.message : 'Could not delete'); } finally { setBusy(false); }
+  };
+  return (
+    <div className="overlay" onClick={onClose}>
+      <form className="panel auth danger-panel" onClick={(e) => e.stopPropagation()} onSubmit={go} data-testid="delete-dialog">
+        <h2>Delete account?</h2>
+        <p>This permanently removes <b>{name}</b>: your rating, friends and synced learning progress. Past games stay in your opponents’ histories as “Deleted player”. This can’t be undone.</p>
+        <label>Password<input type="password" required value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" data-testid="delete-password" /></label>
+        <label>Type <b>DELETE</b> to confirm<input value={typed} onChange={(e) => setTyped(e.target.value)} data-testid="delete-typed" /></label>
+        {err && <div className="auth-error">{err}</div>}
+        <div className="panel-actions">
+          <button className="btn danger" type="submit" disabled={busy || typed !== 'DELETE' || !password} data-testid="delete-confirm">Delete forever</button>
+          <button className="btn ghost" type="button" onClick={onClose}>Cancel</button>
+        </div>
+      </form>
+    </div>
+  );
+}

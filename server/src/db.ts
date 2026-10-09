@@ -19,6 +19,23 @@ export interface UsersTable {
   losses: number;
   draws: number;
   created_at: string;
+  /** Profile avatar symbol (src/net/protocol.ts AVATARS) or null for the initial. */
+  avatar: string | null;
+  /** 1 once the account is deleted: anonymised, can't sign in, hidden from search. */
+  deleted: number;
+}
+
+/**
+ * One row per pair of users (user_a < user_b). `pending` until the other side accepts;
+ * `requested_by` is who sent the request.
+ */
+export interface FriendshipsTable {
+  user_a: string;
+  user_b: string;
+  status: 'pending' | 'accepted';
+  requested_by: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface GamesTable {
@@ -63,6 +80,7 @@ export interface Database {
   games: GamesTable;
   learn_progress: LearnTable;
   game_reviews: ReviewsTable;
+  friendships: FriendshipsTable;
 }
 
 const migrations: Record<string, Migration> = {
@@ -123,6 +141,23 @@ const migrations: Record<string, Migration> = {
         .addColumn('created_at', 'varchar(32)', (c) => c.notNull())
         .execute();
       await db.schema.createIndex('games_ended_idx').on('games').column('ended_at').execute();
+    },
+  },
+  '004_social': {
+    async up(db: Kysely<any>) {
+      await db.schema.alterTable('users').addColumn('avatar', 'varchar(16)').execute();
+      await db.schema.alterTable('users').addColumn('deleted', 'integer', (c) => c.notNull().defaultTo(0)).execute();
+      await db.schema.createIndex('users_name_idx').on('users').column('name').execute();
+      await db.schema.createTable('friendships')
+        .addColumn('user_a', 'varchar(36)', (c) => c.notNull().references('users.id'))
+        .addColumn('user_b', 'varchar(36)', (c) => c.notNull().references('users.id'))
+        .addColumn('status', 'varchar(16)', (c) => c.notNull())
+        .addColumn('requested_by', 'varchar(36)', (c) => c.notNull())
+        .addColumn('created_at', 'varchar(32)', (c) => c.notNull())
+        .addColumn('updated_at', 'varchar(32)', (c) => c.notNull())
+        .addPrimaryKeyConstraint('friendships_pk', ['user_a', 'user_b'])
+        .execute();
+      await db.schema.createIndex('friendships_b_idx').on('friendships').column('user_b').execute();
     },
   },
 };

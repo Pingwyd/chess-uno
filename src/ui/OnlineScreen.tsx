@@ -8,6 +8,11 @@ import type { BoardMode } from './BoardView';
 import { useProgress } from '../learn/store';
 import { OUTLINE_SHAPE as PATH_SHAPE } from '../learn/outline';
 import { pathOrder } from '../learn/progress';
+import { AuthModal } from './AuthModal';
+import { LiveGames } from './social/LiveGames';
+import { Avatar, presenceText } from './social/Avatar';
+import type { FriendInfo } from '../net/protocol';
+import './social/social.css';
 
 export type OnlineIntent = { kind: 'join' | 'watch'; code: string } | null;
 
@@ -19,12 +24,14 @@ interface Props {
   onHome: () => void;
   intent: OnlineIntent;
   onReplay: OpenReplay;
+  /** Open Settings → Friends. */
+  onFriends: () => void;
 }
 
 const client = getOnlineClient();
 const useOnline = (): OnlineView => useSyncExternalStore((f) => client.subscribe(f), () => client.view);
 
-export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent, onReplay }: Props) {
+export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent, onReplay, onFriends }: Props) {
   const view = useOnline();
   const [bootError, setBootError] = useState<string | null>(null);
   const transport = useMemo(() => new OnlineTransport(client), []);
@@ -70,10 +77,10 @@ export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePiece
       />
     );
   }
-  return <Lobby view={view} bootError={bootError} onHome={onHome} onReplay={onReplay} />;
+  return <Lobby view={view} bootError={bootError} onHome={onHome} onReplay={onReplay} onFriends={onFriends} />;
 }
 
-function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootError: string | null; onHome: () => void; onReplay: OpenReplay }) {
+function Lobby({ view, bootError, onHome, onReplay, onFriends }: { view: OnlineView; bootError: string | null; onHome: () => void; onReplay: OpenReplay; onFriends: () => void }) {
   const [auth, setAuth] = useState<'login' | 'signup' | null>(null);
   const [code, setCode] = useState('');
   const user = view.user;
@@ -98,7 +105,7 @@ function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootEr
       <section className="lobby-card account" data-testid="account">
         {user ? (
           <>
-            <div className="avatar">{user.name.slice(0, 1)}</div>
+            <Avatar name={user.name} avatar={user.avatar} size={48} />
             <div className="account-info">
               <div className="account-name" data-testid="account-name">{user.name}{user.guest && <span className="guest-tag">GUEST</span>}</div>
               <div className="account-sub">
@@ -122,7 +129,7 @@ function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootEr
       </section>
 
       {view.lobby.kind === 'waiting' ? (
-        <WaitingRoom code={view.lobby.code} />
+        <WaitingRoom code={view.lobby.code} invitee={view.lobby.invitee} since={view.lobby.since} />
       ) : (
         <div className="lobby-grid">
           <section className="lobby-card">
@@ -150,6 +157,8 @@ function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootEr
             </form>
           </section>
 
+          {!bootError && <FriendsCard view={view} ready={ready} onFriends={onFriends} />}
+          {!bootError && <LiveGames onWatch={(c) => client.spectate(c)} />}
           <Leaderboard me={user} />
           {user && <MyGames me={user} onReplay={onReplay} />}
         </div>
@@ -177,8 +186,23 @@ function QueueStatus({ since, rated }: { since: number; rated: boolean }) {
   );
 }
 
-function WaitingRoom({ code }: { code: string }) {
+function WaitingRoom({ code, invitee, since }: { code: string; invitee?: FriendInfo; since?: number }) {
   const link = `${location.origin}${location.pathname}?join=${code}`;
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { if (!invitee) return; const id = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(id); }, [invitee]);
+  if (invitee) {
+    const left = Math.max(0, 60 - Math.floor((now - (since ?? now)) / 1000));
+    return (
+      <section className="lobby-card waiting challenge-wait" data-testid="challenge-wait">
+        <Avatar name={invitee.name} avatar={invitee.avatar} size={72} />
+        <h2>Challenge sent</h2>
+        <p>Waiting for <b>{invitee.name}</b> ({invitee.rating}) to accept… The game starts the moment they do.</p>
+        <div className="cw-timer">{left}s</div>
+        <div className="spinner big" />
+        <button className="btn ghost" onClick={() => client.leave()} data-testid="challenge-cancel">Cancel challenge</button>
+      </section>
+    );
+  }
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try { await navigator.clipboard.writeText(link); } catch { /* clipboard blocked */ }
@@ -215,7 +239,7 @@ function MyGames({ me, onReplay }: { me: PublicUser; onReplay: OpenReplay }) {
         return (
           <button key={g.gameId} className="recent-item" onClick={() => onReplay({ gameId: g.gameId })}>
             <span className={`ri-res ${o.cls}`}>{o.text}</span>
-            <span className="ri-main"><b>vs {g.players[g.seat === 0 ? 1 : 0]}</b><small>{g.rated ? 'Rated' : 'Casual'} · {g.reason} · {g.turns} turns · {when(g.endedAt)}</small></span>
+            <span className="ri-main"><b>vs {g.players[g.seat === 0 ? 1 : 0]}</b><small>{g.rated ? 'Rated' : 'Casual'} · {g.reason} · {g.turns} turn{g.turns === 1 ? '' : 's'} · {when(g.endedAt)}</small></span>
             <span className="ri-go">Review ›</span>
           </button>
         );
@@ -226,16 +250,29 @@ function MyGames({ me, onReplay }: { me: PublicUser; onReplay: OpenReplay }) {
 
 function Leaderboard({ me }: { me: PublicUser | null }) {
   const [rows, setRows] = useState<PublicUser[] | null>(null);
-  useEffect(() => { client.leaderboard().then(setRows).catch(() => setRows([])); }, [me?.rating]);
+  const [scope, setScope] = useState<'all' | 'friends'>('all');
+  const account = !!me && !me.guest;
+  useEffect(() => {
+    setRows(null);
+    client.leaderboard(scope === 'friends' && account ? 'friends' : 'all').then(setRows).catch(() => setRows([]));
+  }, [me?.rating, scope, account]);
   return (
-    <section className="lobby-card leaderboard">
-      <h2>Leaderboard</h2>
+    <section className="lobby-card leaderboard" data-testid="leaderboard">
+      <div className="card-head">
+        <h2>Leaderboard</h2>
+        {account && (
+          <div className="fchips">
+            <button className={`fchip ${scope === 'all' ? 'on' : ''}`} onClick={() => setScope('all')} data-testid="lb-all">Everyone</button>
+            <button className={`fchip ${scope === 'friends' ? 'on' : ''}`} onClick={() => setScope('friends')} data-testid="lb-friends">★ Friends</button>
+          </div>
+        )}
+      </div>
       {rows === null ? <p>Loading…</p> : rows.length === 0 ? <p>No rated games yet. Sign up and play a Quick Match to get on the board.</p> : (
         <ol>
           {rows.slice(0, 10).map((u, i) => (
             <li key={u.id} className={u.id === me?.id ? 'me' : ''}>
               <span className="lb-rank">{i + 1}</span>
-              <span className="lb-name">{u.name}</span>
+              <span className="lb-name"><Avatar name={u.name} avatar={u.avatar} size={22} /> {u.name}</span>
               <span className="lb-rating">{u.rating}</span>
             </li>
           ))}
@@ -245,46 +282,39 @@ function Leaderboard({ me }: { me: PublicUser | null }) {
   );
 }
 
-function AuthModal({ mode, onMode, onClose }: { mode: 'login' | 'signup'; onMode: (m: 'login' | 'signup') => void; onClose: () => void }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    try {
-      if (mode === 'signup') await client.signup(email, password, name);
-      else await client.login(email, password);
-      onClose();
-    } catch (x) {
-      setErr(x instanceof Error ? x.message : 'Something went wrong');
-    } finally {
-      setBusy(false);
-    }
-  };
+/** Friends at a glance in the lobby: who's online, challenge or watch them. */
+function FriendsCard({ view, ready, onFriends }: { view: OnlineView; ready: boolean; onFriends: () => void }) {
+  const user = view.user;
+  if (!user) return null;
+  if (user.guest) {
+    return (
+      <section className="lobby-card friends-card">
+        <div className="card-head"><h2>Friends</h2></div>
+        <p>Sign up to add friends, see when they’re online and challenge them directly.</p>
+      </section>
+    );
+  }
+  const list = view.friends?.friends ?? [];
+  const live = list.filter((f) => f.presence && f.presence.status !== 'offline');
+  const req = view.friends?.incoming.length ?? 0;
   return (
-    <div className="overlay" onClick={onClose}>
-      <form className="panel auth" onClick={(e) => e.stopPropagation()} onSubmit={submit} data-testid="auth-modal">
-        <div className="seg seg-small">
-          <button type="button" className={`seg-btn ${mode === 'signup' ? 'on' : ''}`} onClick={() => onMode('signup')}>Sign up</button>
-          <button type="button" className={`seg-btn ${mode === 'login' ? 'on' : ''}`} onClick={() => onMode('login')}>Log in</button>
+    <section className="lobby-card friends-card" data-testid="lobby-friends">
+      <div className="card-head">
+        <h2>Friends</h2>
+        <button className="link-btn" onClick={onFriends} data-testid="lobby-friends-all">{req ? <span className="count-pill">{req} new</span> : null} All {list.length} ›</button>
+      </div>
+      {!list.length ? <p>No friends yet — find players by name in Friends.</p> : !live.length ? <p>None of your {list.length} friends are online right now.</p> : live.slice(0, 4).map((f) => (
+        <div key={f.id} className="friend-row compact">
+          <Avatar name={f.name} avatar={f.avatar} size={34} presence={f.presence} />
+          <div className="fr-main"><b>{f.name} <small className="fr-rating">{f.rating}</small></b><small><span className={`ps ps-${f.presence!.status}`}>{presenceText(f.presence)}</span></small></div>
+          <div className="fr-actions">
+            {f.presence!.status === 'playing' && f.presence!.code
+              ? <button className="btn tiny" onClick={() => client.spectate(f.presence!.code!)} data-testid={`lobby-watch-${f.name}`}>👁 Watch</button>
+              : <button className="btn tiny primary" disabled={!ready || view.lobby.kind !== 'idle'} onClick={() => client.challenge(f.id)} data-testid={`lobby-challenge-${f.name}`}>⚔ Challenge</button>}
+          </div>
         </div>
-        {mode === 'signup' && <p className="auth-note">Your guest stats carry over. Rated Quick Match unlocks with an account.</p>}
-        <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-        <label>Password<input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} /></label>
-        {mode === 'signup' && (
-          <label><span>Display name <small>(optional)</small></span><input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} pattern="[A-Za-z0-9 _\-]{3,20}" /></label>
-        )}
-        {err && <div className="auth-error">{err}</div>}
-        <div className="panel-actions">
-          <button className="btn primary" type="submit" disabled={busy}>{busy ? '…' : mode === 'signup' ? 'Create account' : 'Log in'}</button>
-          <button className="btn ghost" type="button" onClick={onClose}>Cancel</button>
-        </div>
-      </form>
-    </div>
+      ))}
+    </section>
   );
 }
 

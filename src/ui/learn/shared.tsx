@@ -1,3 +1,4 @@
+import { reducedMotion } from '../settings/store';
 import { Fragment, type ReactNode } from 'react';
 import type { CardKind } from '../../rules/cards';
 import { CardFace } from '../Card';
@@ -25,8 +26,8 @@ export function CardRow({ cards }: { cards: CardKind[] }) {
   );
 }
 
-export const prefersReducedMotion = () =>
-  typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Reduced motion: the Settings choice, or the OS preference when set to "system". */
+export const prefersReducedMotion = () => reducedMotion();
 
 export function Stars({ n, size = 'md', animate = false }: { n: number; size?: 'sm' | 'md' | 'lg'; animate?: boolean }) {
   return (

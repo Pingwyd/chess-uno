@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { EMOTES } from '../net/protocol';
-import { other, type PromotionPiece } from '../rules/chess';
+import { other, squareName, type PromotionPiece } from '../rules/chess';
+import { useSettings } from './settings/store';
+import { Piece } from './pieces';
 import { formatTurn, type GameEvent, type GameResult, type GameState, type PlayerId } from '../rules/game';
 import type { CardKind } from '../rules/cards';
 import type { LastMoveAnim } from './Board';
@@ -166,11 +168,20 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
     return () => clearTimeout(t);
   }, [banner]);
 
-  const humanTurn = online ? state.current === you : state.players[state.current].kind === 'human';
-  const interactive = state.phase === 'moving' && humanTurn && !state.paused && !promotion && !online?.snap.delayed;
+  const { confirmMoves } = useSettings();
+  const [pending, setPending] = useState<{ from: number; to: number; promo?: PromotionPiece } | null>(null);
+  useEffect(() => setPending(null), [state.turnNumber, state.movesMade, state.phase, confirmMoves]);
 
-  const move = (from: number, to: number, promo?: PromotionPiece) =>
+  const humanTurn = online ? state.current === you : state.players[state.current].kind === 'human';
+  const interactive = state.phase === 'moving' && humanTurn && !state.paused && !promotion && !pending && !online?.snap.delayed;
+
+  const commit = (from: number, to: number, promo?: PromotionPiece) =>
     dispatch({ type: 'move', player: state.current, from, to, promotion: promo });
+  // Settings → "Confirm moves": stage the move and wait for ✓.
+  const move = (from: number, to: number, promo?: PromotionPiece) => {
+    if (confirmMoves) setPending({ from, to, promo });
+    else commit(from, to, promo);
+  };
 
   const zone = (player: PlayerId, rotated: boolean, compact = false) => (
     <PlayerZone
@@ -207,7 +218,16 @@ function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePiec
         anim={anim}
         onMove={(f, t) => move(f, t)}
         onPromotion={(f, t) => setPromotion({ from: f, to: t })}
+        arrows={pending ? [{ from: pending.from, to: pending.to, tone: 'played' }] : undefined}
       />
+      {pending && (
+        <div className={`confirm-move ${pass && state.current === top ? 'confirm-top' : ''}`} data-testid="confirm-move">
+          <span className="confirm-piece"><Piece piece={state.pos.board[pending.from]} set={pieceSet} /></span>
+          <span className="confirm-text">{squareName(pending.from)} → {squareName(pending.to)}{pending.promo ? `=${pending.promo.toUpperCase()}` : ''}</span>
+          <button className="btn small ghost" onClick={() => setPending(null)} data-testid="confirm-undo">Undo</button>
+          <button className="btn small primary" onClick={() => { commit(pending.from, pending.to, pending.promo); setPending(null); }} data-testid="confirm-ok">Play ✓</button>
+        </div>
+      )}
       {has3D() && (
         <button className={`icon-btn board-mode-btn ${pass ? 'board-mode-pass' : ''}`} onClick={onToggleBoard} title={boardMode === '3d' ? 'Switch to 2D board' : 'Switch to 3D board'} data-testid="toggle-board">
           {boardMode === '3d' ? '2D' : '3D'}

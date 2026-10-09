@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { type Color, type Move, colorOfPiece, inCheck, kingSquare } from '../rules/chess';
 import { currentColor, currentLegalMoves, type GameState } from '../rules/game';
+import { useSettings } from './settings/store';
+
+const EMPTY = new Map<number, Move[]>();
 
 /** Selection, legal targets, move badges and check squares — shared by the 2D and 3D boards. */
 export function useBoardInteraction(
@@ -22,6 +25,9 @@ export function useBoardInteraction(
   }, [legal, selected]);
 
   const movable = useMemo(() => new Set(legal.map((m) => m.from)), [legal]);
+  // Settings → "Legal-move hints": hide the dots/rings (moves still work by tapping the square).
+  const { hints } = useSettings();
+  const hintTargets = hints ? targets : EMPTY;
 
   const shownMoves = state.turnMoves.length ? state.turnMoves : state.lastTurnMoves;
   const moveBadge = new Map<number, number>();
@@ -46,5 +52,5 @@ export function useBoardInteraction(
     else setSelected(null);
   };
 
-  return { selected, targets, movable, mover, moveBadge, fromSquares, badgeColor, checked, click };
+  return { selected, targets, hintTargets, movable, mover, moveBadge, fromSquares, badgeColor, checked, click };
 }

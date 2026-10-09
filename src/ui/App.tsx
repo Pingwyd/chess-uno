@@ -11,6 +11,10 @@ import type { LearnTab } from './learn/LearnScreen';
 import { useProgress } from '../learn/store';
 import { setActiveSkins } from './skins';
 import type { ReplaySource } from './replay/ReplayScreen';
+import { SettingsScreen, type SettingsTab } from './settings/SettingsScreen';
+import { useReducedMotion } from './settings/store';
+import { SocialLayer } from './social/SocialLayer';
+import { getOnlineClient, HAS_SERVER, storedToken } from '../net/online';
 
 // The learning path (lessons, puzzles, path map) is its own chunk, loaded on first visit.
 const LearnScreen = lazy(() => import('./learn/LearnScreen'));
@@ -63,11 +67,27 @@ const clearUrlIntent = () => {
 export function App() {
   const [setup, setSetup] = useState<GameSetup | null>(null);
   const [online, setOnline] = useState<boolean>(!!urlIntent);
+  const [intent, setIntent] = useState<{ v: OnlineIntent; key: number }>({ v: urlIntent, key: 0 });
+  const [settingsTab, setSettingsTab] = useState<SettingsTab | null>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).has('settings') ? 'settings' : null));
+  const reduced = useReducedMotion();
   const [replay, setReplay] = useState<ReplayView | null>(() => (urlReplay ? { src: { gameId: urlReplay }, back: 'home' } : null));
   const [learn, setLearn] = useState<LearnTab | null>(() => (typeof location !== 'undefined' && new URLSearchParams(location.search).has('learn') ? 'path' : null));
   const progress = useProgress();
   setActiveSkins(progress.skins);
   useEffect(clearUrlIntent, []);
+  // Signed in on this device before? Connect in the background so friends see you online and
+  // challenges / friend requests reach you on any screen. (Never creates a guest by itself.)
+  useEffect(() => {
+    if (!HAS_SERVER || !storedToken()) return;
+    const c = getOnlineClient();
+    c.ensureSession().then(() => c.connect()).catch(() => {});
+  }, []);
+  /** Jump to the online screen from anywhere (accepting a challenge, watching a friend…). */
+  const goOnline = (v: OnlineIntent = null) => {
+    setSetup(null); setReplay(null); setLearn(null); setSettingsTab(null);
+    setIntent((i) => ({ v, key: i.key + 1 }));
+    setOnline(true);
+  };
   const [pieceSet, setPieceSet] = useState<PieceSet>(() => load('cu.pieceSet', 'arcane'));
   const [sound, setSound] = useState<boolean>(() => load('cu.sound', true));
   const [boardMode, setBoardMode] = useState<BoardMode>(() => (load<BoardMode>('cu.board', '2d') === '3d' && has3D() ? '3d' : '2d'));
@@ -78,9 +98,10 @@ export function App() {
   useEffect(() => { localStorage.setItem('cu.sound', JSON.stringify(sound)); setSoundEnabled(sound); }, [sound]);
 
   return (
-    <div className={`app skin-w-${progress.skins.w} skin-b-${progress.skins.b}`}>
+    <div className={`app skin-w-${progress.skins.w} skin-b-${progress.skins.b} ${reduced ? 'reduce-motion' : ''}`}>
       <PieceDefs />
       <div className="bg-sparks" aria-hidden="true" />
+      <SocialLayer onAccept={() => goOnline()} onOpenFriends={() => { setOnline(false); setSetup(null); setLearn(null); setReplay(null); setSettingsTab('friends'); }} />
       {replay ? (
         <Suspense fallback={<div className="learn-loading">Loading replay…</div>}>
           <ReplayScreen
@@ -108,14 +129,31 @@ export function App() {
             onHome={() => setLearn(null)}
           />
         </Suspense>
+      ) : settingsTab ? (
+        <SettingsScreen
+          key={settingsTab}
+          initialTab={settingsTab}
+          pieceSet={pieceSet}
+          onPieceSet={setPieceSet}
+          boardMode={boardMode}
+          onBoardMode={setBoardMode}
+          sound={sound}
+          onSound={setSound}
+          onHome={() => setSettingsTab(null)}
+          onReplay={(src, tab) => { setSettingsTab(null); setReplay({ src, tab, back: 'home' }); }}
+          onChallenge={() => goOnline()}
+          onWatch={(code) => goOnline({ kind: 'watch', code })}
+        />
       ) : online ? (
         <OnlineScreen
+          key={intent.key}
           pieceSet={pieceSet}
           boardMode={boardMode}
           onToggleBoard={toggleBoard}
           onTogglePieces={() => setPieceSet((p) => (p === 'arcane' ? 'classic' : 'arcane'))}
           onHome={() => setOnline(false)}
-          intent={urlIntent}
+          intent={intent.v}
+          onFriends={() => { setOnline(false); setSettingsTab('friends'); }}
           onReplay={(src, tab) => setReplay({ src, tab, back: 'online' })}
         />
       ) : setup ? (
@@ -129,7 +167,7 @@ export function App() {
           onReview={(src, tab) => { setSetup(null); setReplay({ src, tab, back: 'home' }); }}
         />
       ) : (
-        <Home pieceSet={pieceSet} sound={sound} boardMode={boardMode} onBoardMode={setBoardMode} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} onLearn={(t) => setLearn(t)} onReplay={(src, tab) => setReplay({ src, tab, back: 'home' })} />
+        <Home pieceSet={pieceSet} sound={sound} boardMode={boardMode} onBoardMode={setBoardMode} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} onLearn={(t) => setLearn(t)} onReplay={(src, tab) => setReplay({ src, tab, back: 'home' })} onSettings={setSettingsTab} />
       )}
     </div>
   );

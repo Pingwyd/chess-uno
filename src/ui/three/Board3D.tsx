@@ -11,6 +11,7 @@ import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import { colorOfPiece, typeOf, type Color } from '../../rules/chess';
 import type { BoardArrow, BoardProps } from '../Board';
 import { useBoardInteraction } from '../useBoardInteraction';
+import { useReducedMotion } from '../settings/store';
 import { cameraPreset, homeAzimuth, pieceYaw, squareToWorld, trackPieces, type CameraPreset, type TrackedPiece } from './mapping';
 import { PIECE_HEIGHT, pieceGeometry, type Set3D } from './pieceGeometry';
 import { pieceMaterials } from './materials';
@@ -21,17 +22,6 @@ const TAU = Math.PI * 2;
 /** Screenshot/debug slow motion: set window.__cu3dSlow = 4 to stretch animations. */
 const slow = () => ((typeof window !== 'undefined' && (window as unknown as { __cu3dSlow?: number }).__cu3dSlow) || 1);
 const CLICK_SLOP = 8; // px of drag before a tap stops counting as a click
-
-function useReducedMotion() {
-  const [r, setR] = useState(() => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  useEffect(() => {
-    const m = window.matchMedia('(prefers-reduced-motion: reduce)');
-    const on = () => setR(m.matches);
-    m.addEventListener('change', on);
-    return () => m.removeEventListener('change', on);
-  }, []);
-  return r;
-}
 
 export default function Board3D(props: BoardProps) {
   const { state, bottomColor, faceTopPieces, interactive, pieceSet, anim, onMove, onPromotion } = props;
@@ -416,7 +406,7 @@ function Highlights({ state, ia }: { state: BoardProps['state']; ia: Interaction
       </group>,
     );
   }
-  for (const [sq] of ia.targets) {
+  for (const [sq] of ia.hintTargets) {
     const [x, z] = squareToWorld(sq);
     const capture = !!state.pos.board[sq];
     out.push(

@@ -6,9 +6,13 @@
  */
 import type { GameAction, GameState } from '../rules/game';
 import type { GameTransport } from './transport';
-import type { ChatMessage, ClientMsg, EmoteId, PublicUser, RoomSnapshot, ServerMsg } from './protocol';
+import type {
+  ChallengeInfo, ChatMessage, ClientMsg, EmoteId, FriendInfo, FriendsList, LiveGame, ProfileInfo, PublicUser, Relation, RoomSnapshot, ServerMsg, UserSearchHit,
+} from './protocol';
 
 export const SERVER_URL: string = (import.meta.env.VITE_SERVER_URL as string | undefined)?.replace(/\/$/, '') || 'http://localhost:8787';
+/** False for the public static build (no game server configured): online features show "coming soon". */
+export const HAS_SERVER = !!import.meta.env.DEV || !!import.meta.env.VITE_SERVER_URL;
 const WS_URL = SERVER_URL.replace(/^http/, 'ws') + '/ws';
 const TOKEN_KEY = 'cu.token';
 
@@ -26,7 +30,7 @@ export interface MyOnlineGame {
 
 // ---------------------------------------------------------------- REST
 
-async function call(path: string, body?: unknown, token?: string | null): Promise<{ token?: string; user: PublicUser }> {
+async function call<T = { token?: string; user: PublicUser }>(path: string, body?: unknown, token?: string | null): Promise<T> {
   let res: Response;
   try {
     res = await fetch(SERVER_URL + path, {
@@ -50,7 +54,16 @@ export type ConnStatus = 'idle' | 'connecting' | 'online' | 'offline';
 export type LobbyState =
   | { kind: 'idle' }
   | { kind: 'queued'; rated: boolean; since: number }
-  | { kind: 'waiting'; code: string };
+  | { kind: 'waiting'; code: string; invitee?: FriendInfo; since?: number };
+
+/** A short in-app notice (friend request, challenge declined…). */
+export interface Notice {
+  id: number;
+  text: string;
+  icon: string;
+  /** Optional button: open the friends tab. */
+  action?: 'friends';
+}
 
 export interface OnlineView {
   status: ConnStatus;
@@ -59,6 +72,13 @@ export interface OnlineView {
   snap: RoomSnapshot | null;
   chat: ChatMessage[];
   error: string | null;
+  /** Accounts: friends + pending requests (presence kept live by the socket). */
+  friends: FriendsList | null;
+  /** Friend challenges waiting for your answer. */
+  challenges: ChallengeInfo[];
+  /** Games in progress, while subscribed (Live games list). */
+  live: LiveGame[] | null;
+  notices: Notice[];
   /** Bumps on every change (for React subscriptions). */
   version: number;
 }
@@ -76,7 +96,9 @@ export class OnlineClient {
   private pendingAfterHello: Pending = null;
   /** serverNow - Date.now(), smoothed. */
   offset = 0;
-  view: OnlineView = { status: 'idle', user: null, lobby: { kind: 'idle' }, snap: null, chat: [], error: null, version: 0 };
+  private liveSubs = 0;
+  private noticeSeq = 1;
+  view: OnlineView = { status: 'idle', user: null, lobby: { kind: 'idle' }, snap: null, chat: [], error: null, friends: null, challenges: [], live: null, notices: [], version: 0 };
 
   subscribe(fn: () => void) {
     this.listeners.add(fn);
@@ -134,9 +156,95 @@ export class OnlineClient {
     return res.games ?? [];
   }
 
-  async leaderboard(): Promise<PublicUser[]> {
-    const res = (await call('/api/leaderboard')) as unknown as { players: PublicUser[] };
+  async leaderboard(scope: 'all' | 'friends' = 'all'): Promise<PublicUser[]> {
+    const res = await call<{ players: PublicUser[] }>(`/api/leaderboard${scope === 'friends' ? '?scope=friends' : ''}`, undefined, storedToken());
     return res.players ?? [];
+  }
+
+  // ------------------------------------------------------------ profile & account
+
+  async profile(userId?: string): Promise<ProfileInfo> {
+    const res = await call<{ profile: ProfileInfo }>(userId ? `/api/users/${userId}/profile` : '/api/my/profile', undefined, storedToken());
+    return res.profile;
+  }
+
+  async updateProfile(patch: { name?: string; avatar?: string | null }) {
+    const { user } = await call('/api/profile', patch, storedToken());
+    this.update({ user });
+    return user;
+  }
+
+  async changePassword(current: string, next: string) {
+    await call<{ ok: true }>('/api/account/password', { current, next }, storedToken());
+  }
+
+  async deleteAccount(password: string) {
+    await call<{ ok: true }>('/api/account/delete', { password }, storedToken());
+    localStorage.removeItem(TOKEN_KEY);
+    this.update({ user: null, snap: null, chat: [], lobby: { kind: 'idle' }, friends: null, challenges: [] });
+    this.disconnect();
+  }
+
+  // ------------------------------------------------------------ friends
+
+  async loadFriends(): Promise<FriendsList | null> {
+    if (!this.view.user || this.view.user.guest) { this.update({ friends: null }); return null; }
+    try {
+      const friends = await call<FriendsList>('/api/friends', undefined, storedToken());
+      this.update({ friends });
+      return friends;
+    } catch {
+      return null;
+    }
+  }
+
+  async searchUsers(q: string): Promise<UserSearchHit[]> {
+    const res = await call<{ users: UserSearchHit[] }>(`/api/users/search?q=${encodeURIComponent(q)}`, undefined, storedToken());
+    return res.users ?? [];
+  }
+
+  async friendAction(action: 'request' | 'accept' | 'decline' | 'cancel' | 'remove', userId: string): Promise<Relation> {
+    const res = await call<{ relation: Relation }>(`/api/friends/${action}`, { userId }, storedToken());
+    void this.loadFriends();
+    return res.relation;
+  }
+
+  /** Challenge a friend: the server opens a private room (you wait in it) and pings them. */
+  challenge(userId: string) {
+    if (this.view.status !== 'online') { this.flashError('Not connected to the server'); return false; }
+    return this.send({ t: 'challenge', userId });
+  }
+
+  replyChallenge(id: string, accept: boolean) {
+    this.update({ challenges: this.view.challenges.filter((c) => c.id !== id) });
+    this.send({ t: 'challengeReply', id, accept });
+  }
+
+  // ------------------------------------------------------------ live games
+
+  /** Subscribe to the live-games list (ref-counted); returns the unsubscribe. */
+  watchLive(): () => void {
+    this.liveSubs++;
+    if (this.liveSubs === 1 && this.view.status === 'online') this.send({ t: 'live', on: true });
+    return () => {
+      this.liveSubs = Math.max(0, this.liveSubs - 1);
+      if (!this.liveSubs) {
+        if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ t: 'live', on: false } satisfies ClientMsg));
+        this.update({ live: null });
+      }
+    };
+  }
+
+  // ------------------------------------------------------------ notices
+
+  notify(text: string, icon: string, action?: Notice['action']) {
+    const n: Notice = { id: this.noticeSeq++, text, icon, action };
+    this.update({ notices: [...this.view.notices, n].slice(-3) });
+    setTimeout(() => this.dismiss(n.id), 5000);
+  }
+
+  dismiss(id: number) {
+    if (this.view.notices.some((n) => n.id === id)) this.update({ notices: this.view.notices.filter((n) => n.id !== id) });
   }
 
   async signup(email: string, password: string, name: string) {
@@ -151,7 +259,7 @@ export class OnlineClient {
 
   async logout() {
     localStorage.removeItem(TOKEN_KEY);
-    this.update({ user: null, snap: null, chat: [], lobby: { kind: 'idle' } });
+    this.update({ user: null, snap: null, chat: [], lobby: { kind: 'idle' }, friends: null, challenges: [] });
     this.disconnect();
     await this.ensureSession();
     this.connect();
@@ -219,6 +327,8 @@ export class OnlineClient {
     switch (msg.t) {
       case 'welcome': {
         this.update({ status: 'online', user: msg.user });
+        void this.loadFriends();
+        if (this.liveSubs) this.send({ t: 'live', on: true });
         this.ping();
         if (this.pingTimer) clearInterval(this.pingTimer);
         this.pingTimer = setInterval(() => this.ping(), 10_000);
@@ -244,7 +354,35 @@ export class OnlineClient {
         this.update({ lobby: { kind: 'idle' } });
         return;
       case 'roomCreated':
-        this.update({ lobby: { kind: 'waiting', code: msg.code }, snap: null, chat: [] });
+        this.update({ lobby: { kind: 'waiting', code: msg.code, invitee: msg.invitee, since: Date.now() }, snap: null, chat: [] });
+        return;
+      case 'presence': {
+        const f = this.view.friends;
+        if (!f || !f.friends.some((x) => x.id === msg.userId)) return;
+        this.update({ friends: { ...f, friends: f.friends.map((x) => (x.id === msg.userId ? { ...x, presence: msg.presence } : x)) } });
+        return;
+      }
+      case 'social': {
+        void this.loadFriends();
+        const name = msg.user.name;
+        if (msg.event === 'request') this.notify(`${name} sent you a friend request`, '🤝', 'friends');
+        if (msg.event === 'accepted') this.notify(`${name} is now your friend`, '🎉', 'friends');
+        return;
+      }
+      case 'challenge':
+        if (!this.view.challenges.some((c) => c.id === msg.challenge.id)) this.update({ challenges: [...this.view.challenges, msg.challenge] });
+        return;
+      case 'challengeUpdate': {
+        const had = this.view.challenges.some((c) => c.id === msg.id);
+        if (had) this.update({ challenges: this.view.challenges.filter((c) => c.id !== msg.id) });
+        if (msg.status === 'declined' && !had) this.notify(`${msg.by} declined your challenge`, '✋');
+        if (msg.status === 'expired' && !had) this.notify(`${msg.by === this.view.user?.name ? 'No answer' : msg.by} — challenge expired`, '⌛');
+        if (msg.status === 'expired' && had) this.notify('Challenge expired', '⌛');
+        if (msg.status === 'cancelled' && had) this.notify(`${msg.by} withdrew the challenge`, '↩');
+        return;
+      }
+      case 'liveGames':
+        if (this.liveSubs) this.update({ live: msg.games });
         return;
       case 'room': {
         const fresh = !this.view.snap || this.view.snap.code !== msg.snap.code;

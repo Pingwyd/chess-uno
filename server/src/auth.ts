@@ -16,6 +16,7 @@ export function guestName(): string {
 export const toPublicUser = (u: UsersTable): PublicUser => ({
   id: u.id,
   name: u.name,
+  avatar: u.avatar ?? null,
   guest: !!u.is_guest,
   email: u.email,
   rating: u.rating,
@@ -30,7 +31,7 @@ export class AuthError extends Error {
 }
 
 const EMAIL_RE = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
-const NAME_RE = /^[A-Za-z0-9 _-]{3,20}$/;
+export const NAME_RE = /^[A-Za-z0-9 _-]{3,20}$/;
 
 export class Auth {
   private key: Uint8Array;
@@ -47,7 +48,8 @@ export class Auth {
     try {
       const { payload } = await jwtVerify(token, this.key, { algorithms: ['HS256'] });
       if (!payload.sub) return null;
-      return (await this.db.selectFrom('users').selectAll().where('id', '=', payload.sub).executeTakeFirst()) ?? null;
+      const user = await this.db.selectFrom('users').selectAll().where('id', '=', payload.sub).executeTakeFirst();
+      return user && !user.deleted ? user : null;
     } catch {
       return null;
     }
@@ -57,6 +59,7 @@ export class Auth {
     const user: UsersTable = {
       id: randomUUID(), name: guestName(), email: null, password_hash: null, is_guest: 1,
       rating: START_RATING, rated_games: 0, wins: 0, losses: 0, draws: 0, created_at: new Date().toISOString(),
+      avatar: null, deleted: 0,
     };
     await this.db.insertInto('users').values(user).execute();
     return user;
@@ -79,6 +82,7 @@ export class Auth {
     const user: UsersTable = {
       id: randomUUID(), name, email, password_hash, is_guest: 0,
       rating: START_RATING, rated_games: 0, wins: 0, losses: 0, draws: 0, created_at: new Date().toISOString(),
+      avatar: null, deleted: 0,
     };
     await this.db.insertInto('users').values(user).execute();
     return user;
@@ -89,7 +93,29 @@ export class Auth {
     const user = await this.db.selectFrom('users').selectAll().where('email', '=', email).executeTakeFirst();
     // Always run bcrypt to keep timing similar for unknown emails.
     const ok = await bcrypt.compare(String(password ?? ''), user?.password_hash ?? '$2a$10$invalidinvalidinvalidinvalidinvalidinvalidinvalidinv');
-    if (!user || !ok) throw new AuthError(401, 'Wrong email or password');
+    if (!user || !ok || user.deleted) throw new AuthError(401, 'Wrong email or password');
     return user;
+  }
+
+  async changePassword(user: UsersTable, current: string, next: string): Promise<void> {
+    if (user.is_guest || !user.password_hash) throw new AuthError(403, 'Guests have no password — sign up first');
+    if (typeof next !== 'string' || next.length < 8 || next.length > 128) throw new AuthError(400, 'New password must be 8–128 characters');
+    if (!(await bcrypt.compare(String(current ?? ''), user.password_hash))) throw new AuthError(401, 'Current password is wrong');
+    await this.db.updateTable('users').set({ password_hash: await bcrypt.hash(next, 10) }).where('id', '=', user.id).execute();
+  }
+
+  /**
+   * Delete an account. Finished games stay (the opponent's history and replays need them),
+   * but the user is anonymised: no email, no password, name "Deleted player", hidden everywhere.
+   */
+  async deleteAccount(user: UsersTable, password: string): Promise<void> {
+    if (!user.is_guest) {
+      if (!user.password_hash || !(await bcrypt.compare(String(password ?? ''), user.password_hash))) throw new AuthError(401, 'Password is wrong');
+    }
+    await this.db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('friendships').where((eb) => eb.or([eb('user_a', '=', user.id), eb('user_b', '=', user.id)])).execute();
+      await trx.deleteFrom('learn_progress').where('user_id', '=', user.id).execute();
+      await trx.updateTable('users').set({ deleted: 1, email: null, password_hash: null, name: 'Deleted player', avatar: null }).where('id', '=', user.id).execute();
+    });
   }
 }

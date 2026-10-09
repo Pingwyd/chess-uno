@@ -35,7 +35,7 @@ function sub(g: GameSummary) {
   const r = g.result;
   const res = !r ? 'unfinished' : r.winner === null ? `draw · ${REASON_SHORT[r.reason]}` : `${g.players[r.winner]} won · ${REASON_SHORT[r.reason]}`;
   const mode = g.mode === 'pass' ? 'Pass & Play' : g.mode === 'online' ? (g.online?.rated ? 'Rated' : 'Online') : g.botLevel ? g.botLevel[0].toUpperCase() + g.botLevel.slice(1) : 'Bot';
-  return `${mode} · ${res} · ${g.turns} turns · ${when(g.endedAt)}`;
+  return `${mode} · ${res} · ${g.turns} turn${g.turns === 1 ? '' : 's'} · ${when(g.endedAt)}`;
 }
 
 function Item({ g, onOpen }: { g: GameSummary; onOpen: OpenReplay }) {
