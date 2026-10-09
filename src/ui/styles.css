@@ -592,3 +592,31 @@ button:disabled { cursor: default; }
 .burn-note { position: absolute; left: 50%; bottom: -22px; transform: translateX(-50%); white-space: nowrap; font-size: 12px; font-weight: 800; color: #ffb3c1; text-shadow: 0 1px 4px #000; }
 .reveal-burned .reveal-card { filter: grayscale(1) brightness(0.6) drop-shadow(0 0 24px rgba(255, 84, 112, 0.6)); }
 .reveal-burned .reveal-label { color: #ffb3c1; }
+
+/* ------------------------------------------------------------ reduced motion (Settings → Accessibility) */
+.reduce-motion *, .reduce-motion *::before, .reduce-motion *::after {
+  animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+}
+.reduce-motion .bg-sparks { animation: none !important; }
+
+/* ------------------------------------------------------------ icons (Lucide only, no emoji) */
+.icon { flex: none; display: inline-block; vertical-align: -0.16em; }
+.emote-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; }
+.emote-btn.icon-only { width: 38px; padding: 0; color: var(--ember-2); }
+.emote-gg { font-family: var(--display); letter-spacing: 0.08em; color: var(--ember-2); }
+.emote-chip { display: inline-flex; align-items: center; gap: 6px; }
+.chat-msg.emote .emote-chip { color: var(--ember-2); }
+.chat-msg.emote .emote-label { font-size: 15px; color: var(--text); }
+.learn-home-stats { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.learn-home-stats span { display: inline-flex; align-items: center; gap: 3px; }
+.mode-icon .icon, .learn-home-icon .icon { vertical-align: middle; }
+/* Icon touch-ups: inline icons sit on the text baseline, flex rows keep them centred. */
+.ri-go, .lr-go, .lr-eye, .spectators, .rating-change b, .set-link span, .set-link i, .chev, .link-btn, .btn, .fchip, .friend-tag, .rel-tag, .tag-lock, .tag-skin, .tag-got, .rev-used-mini, .pskin small, .lock-note, .ranked-note, .daily-done, .week-note, .confirm-text, .lesson-mistakes, .tl-burn, .label-pill b { display: inline-flex; align-items: center; gap: 4px; }
+.btn { justify-content: center; }
+.gameover-crest { display: flex; justify-content: center; }
+.gameover.lost .gameover-crest { color: var(--muted); }
+.gameover.drawn .gameover-crest { color: var(--tide); }
+.hand-card-btn .lock { color: #fff; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(12, 10, 24, 0.85); }
+.icon-btn .icon { display: block; }
+.star .icon, .label-pill .icon-star { fill: currentColor; }
+.star { display: inline-flex; }

@@ -80,6 +80,7 @@ export interface Lesson {
   id: string;
   title: string;
   /** Glyph for the path node. */
+  /** Lucide icon name (see src/ui/icons.tsx). */
   icon: string;
   minutes: number;
   steps: Step[];

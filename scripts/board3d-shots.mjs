@@ -205,8 +205,9 @@ if (want('fallback')) {
   const ctx = await b2.newContext({ viewport: { width: 1280, height: 800 } });
   await ctx.addInitScript(() => { localStorage.setItem('cu.board', '"3d"'); localStorage.setItem('cu.sound', 'false'); });
   const page = await ctx.newPage();
-  await page.goto(BASE);
-  const disabled = await page.getByTestId('board-3d-opt').isDisabled();
+  await page.goto(BASE + '/?settings');
+  const disabled = await page.getByTestId('set-3d').isDisabled();
+  await page.getByTestId('nav-home').click();
   await page.getByTestId('start-bot').click();
   await page.locator('.board-frame').waitFor();
   console.log('no-webgl fallback: 3D option disabled =', disabled, ', 2D board shown =', (await page.locator('.board-frame').count()) === 1);

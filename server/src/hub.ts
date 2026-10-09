@@ -2,23 +2,26 @@
  * Connection hub: authenticates sockets, routes messages, runs matchmaking,
  * owns the room registry, and persists results + ratings.
  */
-import { randomInt } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type WebSocket from 'ws';
 import type { Kysely } from 'kysely';
-import type { ClientMsg, ServerMsg } from '../../src/net/protocol';
+import type { ChallengeInfo, ClientMsg, FriendInfo, LiveGame, Presence, ServerMsg, SocialEvent } from '../../src/net/protocol';
 import { normalizeCode } from '../../src/net/protocol';
 import type { Database, UsersTable } from './db';
 import type { ServerConfig } from './config';
 import { Auth, toPublicUser } from './auth';
 import { Room, type Client, type RoomHost } from './room';
 import { updateElo } from './rating';
+import { Social, friendInfo } from './social';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const HELLO_TIMEOUT_MS = 10_000;
 const FINISHED_ROOM_TTL_MS = 10 * 60_000;
+const LIVE_THROTTLE_MS = 1000;
 
 interface QueueEntry { client: Client; rated: boolean; rating: number; since: number }
+interface Challenge { info: ChallengeInfo; timer: NodeJS.Timeout }
 
 export class Hub {
   readonly rooms = new Map<string, Room>();
@@ -27,22 +30,55 @@ export class Hub {
   queue: QueueEntry[] = [];
   private matchTimer: NodeJS.Timeout;
   private roomHost: RoomHost;
+  readonly social: Social;
+  /** Open friend challenges by id. */
+  readonly challenges = new Map<string, Challenge>();
+  private liveTimer: NodeJS.Timeout | null = null;
+  private liveDirty = false;
 
   constructor(private db: Kysely<Database>, private auth: Auth, private cfg: ServerConfig, private now: () => number = Date.now) {
+    this.social = new Social(db);
     this.matchTimer = setInterval(() => this.tryMatch(), 1000);
     this.roomHost = {
       now: this.now,
       clockMs: cfg.clockMs,
       disconnectGraceMs: cfg.disconnectGraceMs,
-      onStart: (room) => this.persistStart(room),
-      onFinish: (room) => this.persistFinish(room),
+      onStart: async (room) => {
+        await this.persistStart(room);
+        for (const s of room.seats) if (s) void this.presenceChanged(s.user.id);
+        this.markLive();
+      },
+      onFinish: async (room) => {
+        const out = await this.persistFinish(room);
+        for (const s of room.seats) if (s) void this.presenceChanged(s.user.id);
+        this.markLive();
+        return out;
+      },
       onClosed: (room) => this.dropRoom(room),
+      onChange: () => this.markLive(),
     };
   }
 
   close() {
     clearInterval(this.matchTimer);
+    if (this.liveTimer) clearTimeout(this.liveTimer);
+    for (const c of this.challenges.values()) clearTimeout(c.timer);
+    this.challenges.clear();
     for (const r of this.rooms.values()) r.close();
+  }
+
+  isOnline(userId: string) { return this.userClient.has(userId); }
+  inGame(userId: string) { return this.activeRoomOf(userId)?.status === 'playing'; }
+
+  /** Sign a user's socket out (deleted account). */
+  dropUser(userId: string) {
+    const c = this.userClient.get(userId);
+    if (!c) return;
+    this.removeFromQueue(c);
+    const room = this.activeRoomOf(userId);
+    if (room?.status === 'waiting') room.close();
+    c.send({ t: 'error', code: 'auth', message: 'Your account was deleted' });
+    try { c.ws.close(4003, 'deleted'); } catch { /* ignore */ }
   }
 
   // ------------------------------------------------------------ connections
@@ -84,6 +120,7 @@ export class Hub {
   }
 
   private onHello(client: Client) {
+    void this.loadFriends(client);
     const old = this.userClient.get(client.user.id);
     if (old && old !== client) {
       old.send({ t: 'error', code: 'replaced', message: 'You connected from another tab' });
@@ -94,10 +131,16 @@ export class Hub {
     const code = this.userRoom.get(client.user.id) ?? null;
     client.send({ t: 'welcome', user: toPublicUser(client.user), activeRoom: code });
     if (code) this.rooms.get(code)?.attach(client);
+    // Challenges that arrived while this player was on another tab / reconnecting.
+    for (const c of this.challenges.values()) if (c.info.to.id === client.user.id) client.send({ t: 'challenge', challenge: c.info });
+    if (!old) void this.presenceChanged(client.user.id);
   }
 
   private onClose(client: Client) {
-    if (this.userClient.get(client.user.id) === client) this.userClient.delete(client.user.id);
+    if (this.userClient.get(client.user.id) === client) {
+      this.userClient.delete(client.user.id);
+      void this.presenceChanged(client.user.id);
+    }
     this.removeFromQueue(client);
     if (client.spectating) this.rooms.get(client.spectating)?.detach(client);
     const code = this.userRoom.get(client.user.id);
@@ -137,7 +180,7 @@ export class Hub {
         this.removeFromQueue(client);
         this.leaveSpectating(client);
         await this.refreshUser(client);
-        const room = new Room(this.newCode(), false, this.roomHost);
+        const room = new Room(this.newCode(), false, this.roomHost, true);
         room.addPlayer(client);
         this.rooms.set(room.code, room);
         this.userRoom.set(uid, room.code);
@@ -175,6 +218,14 @@ export class Hub {
         client.send({ t: 'left' });
         return;
       }
+      case 'challenge':
+        return this.challenge(client, msg.userId);
+      case 'challengeReply':
+        return this.replyChallenge(client, msg.id, !!msg.accept);
+      case 'live':
+        client.liveOn = !!msg.on;
+        if (client.liveOn) client.send({ t: 'liveGames', games: this.liveGames(client) });
+        return;
       case 'action':
       case 'chat': {
         const room = this.activeRoomOf(uid) ?? this.rooms.get(this.userRoom.get(uid) ?? '') ?? (client.spectating ? this.rooms.get(client.spectating) : undefined);
@@ -306,5 +357,160 @@ export class Hub {
   private dropRoom(room: Room) {
     this.rooms.delete(room.code);
     for (const s of room.seats) if (s && this.userRoom.get(s.user.id) === room.code) this.userRoom.delete(s.user.id);
+    // A waiting room that closes (challenger left / disconnected) withdraws its challenge.
+    for (const c of this.challenges.values()) {
+      if (c.info.code !== room.code) continue;
+      this.endChallenge(c.info.id);
+      this.userClient.get(c.info.to.id)?.send({ t: 'challengeUpdate', id: c.info.id, status: 'cancelled', by: c.info.from.name });
+    }
+    for (const s of room.seats) if (s) void this.presenceChanged(s.user.id);
+    this.markLive();
+  }
+
+  // ------------------------------------------------------------ friends & presence
+
+  private async loadFriends(client: Client) {
+    client.friendIds = client.user.is_guest ? new Set() : new Set(await this.social.friendIds(client.user.id));
+  }
+
+  presenceOf(userId: string): Presence {
+    const room = this.activeRoomOf(userId);
+    if (room?.status === 'playing') return { status: 'playing', code: room.code, rated: room.rated };
+    return { status: this.userClient.has(userId) ? 'online' : 'offline' };
+  }
+
+  /** Tell a user's online friends where they are now. */
+  async presenceChanged(userId: string) {
+    const ids = await this.social.friendIds(userId).catch(() => [] as string[]);
+    if (!ids.length) return;
+    const presence = this.presenceOf(userId);
+    for (const id of ids) this.userClient.get(id)?.send({ t: 'presence', userId, presence });
+  }
+
+  /** After a friendship change: push the event to the other player and refresh both cached friend sets. */
+  async socialEvent(to: string, event: SocialEvent, from: UsersTable) {
+    for (const id of [to, from.id]) {
+      const c = this.userClient.get(id);
+      if (c) await this.loadFriends(c);
+    }
+    const target = this.userClient.get(to);
+    target?.send({ t: 'social', event, user: friendInfo(from) });
+    if (event === 'accepted') {
+      // Both sides immediately learn each other's presence.
+      target?.send({ t: 'presence', userId: from.id, presence: this.presenceOf(from.id) });
+      this.userClient.get(from.id)?.send({ t: 'presence', userId: to, presence: this.presenceOf(to) });
+    }
+    this.markLive();
+  }
+
+  // ------------------------------------------------------------ challenges
+
+  private async challenge(client: Client, targetId: string) {
+    const me = await this.refreshUser(client);
+    const fail = (message: string) => client.send({ t: 'error', code: 'challenge', message });
+    if (me.is_guest) return fail('Create a free account to challenge friends');
+    if (typeof targetId !== 'string' || targetId === me.id) return fail('Pick a friend to challenge');
+    if (this.activeRoomOf(me.id)) return fail('You are already in a game');
+    if (await this.social.relation(me.id, targetId) !== 'friends') return fail('You can only challenge friends');
+    const target = this.userClient.get(targetId);
+    if (!target) return fail('Your friend is offline');
+    if (this.activeRoomOf(targetId)) return fail('Your friend is in a game right now');
+    for (const c of this.challenges.values()) if (c.info.from.id === me.id) return fail('You already have a challenge waiting');
+    this.removeFromQueue(client);
+    this.leaveSpectating(client);
+    const room = new Room(this.newCode(), false, this.roomHost, true);
+    room.invitee = friendInfo(target.user);
+    room.addPlayer(client);
+    this.rooms.set(room.code, room);
+    this.userRoom.set(me.id, room.code);
+    const info: ChallengeInfo = {
+      id: randomUUID(), from: friendInfo(me), to: friendInfo(target.user), code: room.code, expiresAt: this.now() + this.cfg.challengeTtlMs,
+    };
+    const timer = setTimeout(() => this.lapseChallenge(info.id, 'expired'), this.cfg.challengeTtlMs);
+    timer.unref?.();
+    this.challenges.set(info.id, { info, timer });
+    client.send({ t: 'roomCreated', code: room.code, invitee: info.to });
+    target.send({ t: 'challenge', challenge: info });
+  }
+
+  private endChallenge(id: string) {
+    const c = this.challenges.get(id);
+    if (!c) return null;
+    clearTimeout(c.timer);
+    this.challenges.delete(id);
+    return c.info;
+  }
+
+  /** Declined or expired: close the waiting room and tell both players. */
+  private lapseChallenge(id: string, status: 'declined' | 'expired') {
+    const info = this.endChallenge(id);
+    if (!info) return;
+    const by = status === 'declined' ? info.to.name : info.from.name;
+    this.userClient.get(info.from.id)?.send({ t: 'challengeUpdate', id, status, by });
+    this.userClient.get(info.to.id)?.send({ t: 'challengeUpdate', id, status, by });
+    const room = this.rooms.get(info.code);
+    if (room?.status === 'waiting') {
+      room.close();
+      this.userClient.get(info.from.id)?.send({ t: 'left' });
+    }
+  }
+
+  private async replyChallenge(client: Client, id: string, accept: boolean) {
+    const c = this.challenges.get(id);
+    if (!c || c.info.to.id !== client.user.id) return client.send({ t: 'error', code: 'challenge', message: 'That challenge is no longer open' });
+    if (!accept) return this.lapseChallenge(id, 'declined');
+    const room = this.rooms.get(c.info.code);
+    if (!room || room.status !== 'waiting') {
+      this.endChallenge(id);
+      return client.send({ t: 'error', code: 'challenge', message: 'That challenge is no longer open' });
+    }
+    if (this.activeRoomOf(client.user.id)) return client.send({ t: 'error', code: 'busy', message: 'Finish your current game first' });
+    this.endChallenge(id);
+    this.userClient.get(c.info.from.id)?.send({ t: 'challengeUpdate', id, status: 'accepted', by: client.user.name });
+    this.removeFromQueue(client);
+    this.leaveSpectating(client);
+    await this.refreshUser(client);
+    room.addPlayer(client);
+    this.userRoom.set(client.user.id, room.code);
+    await room.start();
+  }
+
+  // ------------------------------------------------------------ live games
+
+  /**
+   * Games in progress, top-rated first. Quick Match games are public; private rooms (invite links,
+   * friend challenges) are only listed for friends of a player.
+   */
+  liveGames(viewer: { user: { id: string }; friendIds?: Set<string> } | null): LiveGame[] {
+    const friends = viewer?.friendIds ?? new Set<string>();
+    const out: LiveGame[] = [];
+    for (const room of this.rooms.values()) {
+      if (room.status !== 'playing' || !room.state) continue;
+      const [a, b] = room.seats;
+      if (!a || !b) continue;
+      const friend = friends.has(a.user.id) || friends.has(b.user.id);
+      const mine = viewer && (a.user.id === viewer.user.id || b.user.id === viewer.user.id);
+      if (room.isPrivate && !friend && !mine) continue;
+      const players: [FriendInfo, FriendInfo] = [friendInfo(a.user), friendInfo(b.user)];
+      out.push({
+        code: room.code, rated: room.rated, private: room.isPrivate, players, friend,
+        spectators: room.spectators.size, turn: room.state.turnNumber, startedAt: room.startedAt,
+      });
+    }
+    const score = (g: LiveGame) => (g.players[0].rating + g.players[1].rating) / 2;
+    return out.sort((x, y) => score(y) - score(x) || y.startedAt - x.startedAt).slice(0, 50);
+  }
+
+  /** Coalesce live-list changes and push them to subscribers at most once a second. */
+  private markLive() {
+    this.liveDirty = true;
+    if (this.liveTimer) return;
+    this.liveTimer = setTimeout(() => {
+      this.liveTimer = null;
+      if (!this.liveDirty) return;
+      this.liveDirty = false;
+      for (const c of this.userClient.values()) if (c.liveOn) c.send({ t: 'liveGames', games: this.liveGames(c) });
+    }, LIVE_THROTTLE_MS);
+    this.liveTimer.unref?.();
   }
 }

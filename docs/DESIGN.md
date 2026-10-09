@@ -109,11 +109,11 @@ White's **very first turn of the game is capped at 1 move**, whatever card is dr
 - **Board orientation (online):** both players' boards flip with an animation so your pieces are always at the bottom of your screen. You can turn this off in settings. In **Pass & Play**, players stay seated and the shared board re-orients instead (see §4.1).
 - **Anti-ping-pong:** you can't play a Reverse on the turn right after your opponent played one.
 - **Opening protection:** Reverse can't be played until **each player has finished 5 turns.**
-- **One Reverse per player per game (rules v2).** Once you've played your Reverse, any other Reverse in your hand is **discarded at once**, and any Reverse you **draw later is discarded and you draw again** (like drawing past an action card, but it never reaches your hand). Dead Reverses therefore never take up a hand slot or force an overflow choice. Your opponent keeps their own Reverse until they use it. The rules engine (and so the server) rejects a second Reverse, the hand shows a greyed "USED" Reverse chip with a tooltip, and the notation marks a discarded Reverse as `[Reverse✕]`.
+- **One Reverse per player per game (rules v2).** Once you've played your Reverse, any other Reverse in your hand is **discarded at once**, and any Reverse you **draw later is discarded and you draw again** (like drawing past an action card, but it never reaches your hand). Dead Reverses therefore never take up a hand slot or force an overflow choice. Your opponent keeps their own Reverse until they use it. The rules engine (and so the server) rejects a second Reverse, the hand shows a greyed "USED" Reverse chip with a tooltip, and the notation marks a discarded Reverse as `[Reverse-burned]`.
 
 ### 2.9 Turn Notation
 Moves are recorded in an extended version of standard chess notation (PGN) that also logs cards. Example:
-`7. [3] e4 Nf3 Bc4 | ... [Skip→hand][2] Nf6 d5` and `8. {Reverse}`
+`7. [3] e4 Nf3 Bc4 | ... [Skip->hand][2] Nf6 d5` and `8. {Reverse}`
 
 ---
 
@@ -193,6 +193,10 @@ The phone or tablet lies **flat on a table between two players sitting face to f
 A **Classic** piece set (standard Staunton pieces) is always available for accessibility and for purists.
 
 **Seasonal themes:** examples include Halloween, Winter, Lunar New Year, and Summer. **Each season gets a brand-new design every year** (for example, Halloween 2026 and Halloween 2027 will look different). Past seasonal sets stay with players who earned them as collectibles.
+
+**UI guidelines:**
+- **Icons: Lucide only, no emoji.** All interface icons (nav, buttons, badges, status, chat emotes, card corner marks) are Lucide icons with consistent size and stroke, and accessible labels where an icon stands alone. No emoji or unicode symbol glyphs appear in UI text. Chess annotations (`!!`, `?`, `+`, `#`) and the piece art itself are not icons, so they stay.
+- **3D graphics quality (built):** Auto / High / Low. Auto drops effects before resolution (particles, then bloom, then shadows, then reflections, then one small DPR step) and never renders below 1.25x on high-DPI phones, so the board stays sharp.
 
 **Accessibility:** colorblind-safe side colors, a high-contrast mode, a reduced-motion mode, and screen-reader move announcements on the 2D board.
 
@@ -286,7 +290,7 @@ Every finished game can be replayed, and the replay **doubles as a review**:
 
 | Feature | Details |
 |---|---|
-| **Friend invites** | Share a link (`chessuno.app/c/AB12CD`) that opens a challenge. Friend requests and an online/in-game status list |
+| **Friend invites** | Share a link (`chessuno.app/c/AB12CD`) that opens a challenge. Friend requests and an online/in-game status list. **[Built]** Direct challenges to an online friend open a private unrated room. The friend gets an in-app Accept/Decline card, and the challenge **expires after 5 minutes** |
 | **Chat** | Quick emotes (GG, 👏, 😮, 😂, "Nice Reverse!") plus regular text chat. Profanity filter, mute, and report. Text chat can be turned off in settings |
 | **Live Games** | A list of games in progress, **sorted by highest rating first**, filterable by friends or featured games, with spectator counts |
 | **Spectator links** | Share-to-watch links (`chessuno.app/w/XY98ZT`) that open a specific game straight away. **[Proposed]** Ranked games are shown to spectators with a 1-turn delay to prevent cheating. Spectators can see how many cards each player holds, but not which ones |

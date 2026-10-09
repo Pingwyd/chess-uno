@@ -1,8 +1,10 @@
+import { reducedMotion } from '../settings/store';
 import { Fragment, type ReactNode } from 'react';
 import type { CardKind } from '../../rules/cards';
 import { CardFace } from '../Card';
 import type { PieceSet } from '../pieces';
 import type { BoardMode } from '../BoardView';
+import { Icon } from '../icons';
 
 export interface BoardEnv {
   pieceSet: PieceSet;
@@ -25,14 +27,14 @@ export function CardRow({ cards }: { cards: CardKind[] }) {
   );
 }
 
-export const prefersReducedMotion = () =>
-  typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+/** Reduced motion: the Settings choice, or the OS preference when set to "system". */
+export const prefersReducedMotion = () => reducedMotion();
 
 export function Stars({ n, size = 'md', animate = false }: { n: number; size?: 'sm' | 'md' | 'lg'; animate?: boolean }) {
   return (
     <span className={`stars stars-${size} ${animate ? 'stars-anim' : ''}`} aria-label={`${n} of 3 stars`}>
       {[1, 2, 3].map((i) => (
-        <span key={i} className={`star ${i <= n ? 'on' : ''}`} style={{ animationDelay: `${0.25 + i * 0.28}s` }}>★</span>
+        <span key={i} className={`star ${i <= n ? 'on' : ''}`} style={{ animationDelay: `${0.25 + i * 0.28}s` }}><Icon name="star" size="1em" className="star-svg" /></span>
       ))}
     </span>
   );

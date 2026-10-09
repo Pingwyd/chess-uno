@@ -1,4 +1,4 @@
-/** Minimal JSON REST API: guest/signup/login/me, leaderboard, finished game logs. */
+/** Minimal JSON REST API: accounts, profiles, friends, leaderboard, live games, finished game logs. */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Kysely } from 'kysely';
 import type { Database } from './db';
@@ -6,6 +6,8 @@ import { Auth, AuthError, toPublicUser } from './auth';
 import type { ServerConfig } from './config';
 import { mergeProgress, sanitize } from '../../src/learn/progress';
 import { recordFor, type ReviewService } from './review';
+import type { Hub } from './hub';
+import { requireAccount } from './social';
 
 const MAX_BODY = 16 * 1024;
 
@@ -41,8 +43,9 @@ function limited(authHits: Map<string, number[]>, req: IncomingMessage, max = 20
   return hits.length > max;
 }
 
-export function createHttpHandler(db: Kysely<Database>, auth: Auth, cfg: ServerConfig, reviews?: ReviewService) {
+export function createHttpHandler(db: Kysely<Database>, auth: Auth, cfg: ServerConfig, reviews?: ReviewService, hub?: Hub) {
   const authHits = new Map<string, number[]>();
+  const socialHits = new Map<string, number[]>();
   return async (req: IncomingMessage, res: ServerResponse) => {
     const origin = req.headers.origin;
     const allowed = cfg.corsOrigin === '*' ? '*' : cfg.corsOrigin.split(',').map((s) => s.trim()).includes(origin ?? '') ? origin! : '';
@@ -100,9 +103,100 @@ export function createHttpHandler(db: Kysely<Database>, auth: Auth, cfg: ServerC
         return send(200, { progress: merged });
       }
       if (req.method === 'GET' && url.pathname === '/api/leaderboard') {
-        const rows = await db.selectFrom('users').selectAll().where('is_guest', '=', 0).where('rated_games', '>', 0)
+        if (url.searchParams.get('scope') === 'friends') {
+          // You and your friends, rated or not.
+          const me = requireAccount(await auth.verify(bearer(req)));
+          const ids = [me.id, ...(hub ? await hub.social.friendIds(me.id) : [])];
+          const rows = await db.selectFrom('users').selectAll().where('id', 'in', ids).where('deleted', '=', 0).orderBy('rating', 'desc').execute();
+          return send(200, { players: rows.map((u) => ({ ...toPublicUser(u), email: undefined })) });
+        }
+        const rows = await db.selectFrom('users').selectAll().where('is_guest', '=', 0).where('deleted', '=', 0).where('rated_games', '>', 0)
           .orderBy('rating', 'desc').limit(50).execute();
         return send(200, { players: rows.map((u) => ({ ...toPublicUser(u), email: undefined })) });
+      }
+      if (hub) {
+        const social = hub.social;
+        if (req.method === 'GET' && url.pathname === '/api/live') {
+          // Games in progress (also pushed live over the socket; this is the polling fallback).
+          const me = await auth.verify(bearer(req));
+          const friendIds = me && !me.is_guest ? new Set(await social.friendIds(me.id)) : undefined;
+          return send(200, { games: hub.liveGames(me ? { user: me, friendIds } : null) });
+        }
+        if (req.method === 'POST' && url.pathname === '/api/profile') {
+          const me = await auth.verify(bearer(req));
+          if (!me) return send(401, { error: 'Not signed in' });
+          const body = await readJson(req);
+          const user = await social.updateProfile(me, body);
+          return send(200, { user: toPublicUser(user) });
+        }
+        if (req.method === 'POST' && url.pathname === '/api/account/password') {
+          if (limited(authHits, req)) return send(429, { error: 'Too many requests' });
+          const me = await auth.verify(bearer(req));
+          if (!me) return send(401, { error: 'Not signed in' });
+          const body = await readJson(req);
+          await auth.changePassword(me, String(body.current ?? ''), String(body.next ?? ''));
+          return send(200, { ok: true });
+        }
+        if (req.method === 'POST' && url.pathname === '/api/account/delete') {
+          if (limited(authHits, req)) return send(429, { error: 'Too many requests' });
+          const me = await auth.verify(bearer(req));
+          if (!me) return send(401, { error: 'Not signed in' });
+          if (hub.inGame(me.id)) return send(409, { error: 'Finish or resign your current game first' });
+          const body = await readJson(req);
+          const friends = await social.friendIds(me.id);
+          await auth.deleteAccount(me, String(body.password ?? ''));
+          hub.dropUser(me.id);
+          for (const id of friends) await hub.socialEvent(id, 'removed', me);
+          return send(200, { ok: true });
+        }
+        const profileMatch = url.pathname.match(/^\/api\/users\/([0-9a-f-]{36})\/profile$/);
+        if (req.method === 'GET' && (profileMatch || url.pathname === '/api/my/profile')) {
+          const me = await auth.verify(bearer(req));
+          const id = profileMatch ? profileMatch[1] : me?.id;
+          if (!id) return send(401, { error: 'Not signed in' });
+          const profile = await social.profile(id);
+          if (!profile) return send(404, { error: 'Player not found' });
+          if (me && me.id === id) profile.user.email = me.email;
+          if (me && !me.is_guest) {
+            profile.relation = await social.relation(me.id, id);
+            if (profile.relation === 'friends') profile.presence = hub.presenceOf(id);
+          }
+          return send(200, { profile });
+        }
+        if (req.method === 'GET' && url.pathname === '/api/users/search') {
+          const me = requireAccount(await auth.verify(bearer(req)));
+          if (limited(socialHits, req, 60)) return send(429, { error: 'Too many requests' });
+          return send(200, { users: await social.search(me, url.searchParams.get('q') ?? '') });
+        }
+        if (req.method === 'GET' && url.pathname === '/api/friends') {
+          const me = requireAccount(await auth.verify(bearer(req)));
+          const list = await social.list(me.id);
+          for (const f of list.friends) f.presence = hub.presenceOf(f.id);
+          return send(200, list);
+        }
+        const friendMatch = url.pathname.match(/^\/api\/friends\/(request|accept|decline|cancel|remove)$/);
+        if (req.method === 'POST' && friendMatch) {
+          const me = requireAccount(await auth.verify(bearer(req)));
+          if (limited(socialHits, req, 60)) return send(429, { error: 'Too many requests' });
+          const body = await readJson(req);
+          const action = friendMatch[1];
+          let relation: string;
+          if (action === 'request') {
+            const res = await social.request(me, body.userId);
+            relation = res.relation;
+            await hub.socialEvent(res.other.id, relation === 'friends' ? 'accepted' : 'request', me);
+          } else if (action === 'accept') {
+            const other = await social.accept(me, body.userId);
+            relation = 'friends';
+            await hub.socialEvent(other.id, 'accepted', me);
+          } else {
+            const kind = action as 'decline' | 'cancel' | 'remove';
+            const other = await social.drop(me, body.userId, kind);
+            relation = 'none';
+            await hub.socialEvent(other.id, kind === 'decline' ? 'declined' : kind === 'cancel' ? 'cancelled' : 'removed', me);
+          }
+          return send(200, { relation });
+        }
       }
       if (req.method === 'GET' && url.pathname === '/api/my/games') {
         // Your recent finished online games (newest first).
@@ -112,7 +206,7 @@ export function createHttpHandler(db: Kysely<Database>, auth: Auth, cfg: ServerC
           .where((eb) => eb.or([eb('player0_id', '=', user.id), eb('player1_id', '=', user.id)]))
           .orderBy('ended_at', 'desc').limit(30).execute();
         const ids = [...new Set(rows.flatMap((g) => [g.player0_id, g.player1_id]))];
-        const users = ids.length ? await db.selectFrom('users').select(['id', 'name']).where('id', 'in', ids).execute() : [];
+        const users = ids.length ? await db.selectFrom('users').select(['id', 'name', 'avatar']).where('id', 'in', ids).execute() : [];
         const name = (id: string) => users.find((u) => u.id === id)?.name ?? 'Player';
         return send(200, {
           games: rows.map((g) => {

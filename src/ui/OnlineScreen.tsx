@@ -1,13 +1,20 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { getOnlineClient, OnlineTransport, SERVER_URL, type MyOnlineGame, type OnlineView } from '../net/online';
 import { outcome, when, type OpenReplay } from './RecentGames';
-import { normalizeCode, type PublicUser } from '../net/protocol';
+import { CHALLENGE_TTL_MS, normalizeCode, type PublicUser } from '../net/protocol';
+import { countdown } from './social/countdown';
 import { GameScreen, type OnlineBinding } from './GameScreen';
 import type { PieceSet } from './pieces';
 import type { BoardMode } from './BoardView';
 import { useProgress } from '../learn/store';
 import { OUTLINE_SHAPE as PATH_SHAPE } from '../learn/outline';
 import { pathOrder } from '../learn/progress';
+import { AuthModal } from './AuthModal';
+import type { SocialTab } from './social/SocialScreen';
+import { Avatar } from './social/Avatar';
+import type { FriendInfo } from '../net/protocol';
+import './social/social.css';
+import { Icon } from './icons';
 
 export type OnlineIntent = { kind: 'join' | 'watch'; code: string } | null;
 
@@ -19,12 +26,15 @@ interface Props {
   onHome: () => void;
   intent: OnlineIntent;
   onReplay: OpenReplay;
+  /** Open the Social page (friends / live games) or the Leaderboard page. */
+  onSocial: (tab: SocialTab) => void;
+  onLeaderboard: () => void;
 }
 
 const client = getOnlineClient();
 const useOnline = (): OnlineView => useSyncExternalStore((f) => client.subscribe(f), () => client.view);
 
-export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent, onReplay }: Props) {
+export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent, onReplay, onSocial, onLeaderboard }: Props) {
   const view = useOnline();
   const [bootError, setBootError] = useState<string | null>(null);
   const transport = useMemo(() => new OnlineTransport(client), []);
@@ -70,10 +80,10 @@ export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePiece
       />
     );
   }
-  return <Lobby view={view} bootError={bootError} onHome={onHome} onReplay={onReplay} />;
+  return <Lobby view={view} bootError={bootError} onHome={onHome} onReplay={onReplay} onSocial={onSocial} onLeaderboard={onLeaderboard} />;
 }
 
-function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootError: string | null; onHome: () => void; onReplay: OpenReplay }) {
+function Lobby({ view, bootError, onHome, onReplay, onSocial, onLeaderboard }: { view: OnlineView; bootError: string | null; onHome: () => void; onReplay: OpenReplay; onSocial: (t: SocialTab) => void; onLeaderboard: () => void }) {
   const [auth, setAuth] = useState<'login' | 'signup' | null>(null);
   const [code, setCode] = useState('');
   const user = view.user;
@@ -83,7 +93,7 @@ function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootEr
   return (
     <div className="lobby" data-testid="lobby">
       <header className="lobby-bar">
-        <button className="icon-btn" onClick={() => { if (view.lobby.kind === 'queued') client.cancelQueue(); if (view.lobby.kind === 'waiting') client.leave(); onHome(); }} aria-label="Home">⌂</button>
+        <button className="icon-btn" onClick={() => { if (view.lobby.kind === 'queued') client.cancelQueue(); if (view.lobby.kind === 'waiting') client.leave(); onHome(); }} aria-label="Home"><Icon name="house" size={20} /></button>
         <h1>Online</h1>
         <span className={`conn conn-${bootError ? 'offline' : view.status}`} data-testid="conn-status"><i />{statusText}</span>
       </header>
@@ -98,7 +108,7 @@ function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootEr
       <section className="lobby-card account" data-testid="account">
         {user ? (
           <>
-            <div className="avatar">{user.name.slice(0, 1)}</div>
+            <Avatar name={user.name} avatar={user.avatar} size={48} />
             <div className="account-info">
               <div className="account-name" data-testid="account-name">{user.name}{user.guest && <span className="guest-tag">GUEST</span>}</div>
               <div className="account-sub">
@@ -122,7 +132,7 @@ function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootEr
       </section>
 
       {view.lobby.kind === 'waiting' ? (
-        <WaitingRoom code={view.lobby.code} />
+        <WaitingRoom code={view.lobby.code} invitee={view.lobby.invitee} since={view.lobby.since} />
       ) : (
         <div className="lobby-grid">
           <section className="lobby-card">
@@ -150,7 +160,7 @@ function Lobby({ view, bootError, onHome, onReplay }: { view: OnlineView; bootEr
             </form>
           </section>
 
-          <Leaderboard me={user} />
+          {!bootError && <LobbyLinks view={view} onSocial={onSocial} onLeaderboard={onLeaderboard} />}
           {user && <MyGames me={user} onReplay={onReplay} />}
         </div>
       )}
@@ -177,8 +187,23 @@ function QueueStatus({ since, rated }: { since: number; rated: boolean }) {
   );
 }
 
-function WaitingRoom({ code }: { code: string }) {
+function WaitingRoom({ code, invitee, since }: { code: string; invitee?: FriendInfo; since?: number }) {
   const link = `${location.origin}${location.pathname}?join=${code}`;
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => { if (!invitee) return; const id = setInterval(() => setNow(Date.now()), 500); return () => clearInterval(id); }, [invitee]);
+  if (invitee) {
+    return (
+      <section className="lobby-card waiting challenge-wait" data-testid="challenge-wait">
+        <Avatar name={invitee.name} avatar={invitee.avatar} size={72} />
+        <h2>Challenge sent</h2>
+        <p>Waiting for <b>{invitee.name}</b> ({invitee.rating}) to accept… The game starts the moment they do.</p>
+        <div className="cw-timer" data-testid="challenge-wait-timer">{countdown((since ?? now) + CHALLENGE_TTL_MS - now)}</div>
+        <small className="cw-note">The invite expires in {CHALLENGE_TTL_MS / 60_000} minutes.</small>
+        <div className="spinner big" />
+        <button className="btn ghost" onClick={() => client.leave()} data-testid="challenge-cancel">Cancel challenge</button>
+      </section>
+    );
+  }
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     try { await navigator.clipboard.writeText(link); } catch { /* clipboard blocked */ }
@@ -215,8 +240,8 @@ function MyGames({ me, onReplay }: { me: PublicUser; onReplay: OpenReplay }) {
         return (
           <button key={g.gameId} className="recent-item" onClick={() => onReplay({ gameId: g.gameId })}>
             <span className={`ri-res ${o.cls}`}>{o.text}</span>
-            <span className="ri-main"><b>vs {g.players[g.seat === 0 ? 1 : 0]}</b><small>{g.rated ? 'Rated' : 'Casual'} · {g.reason} · {g.turns} turns · {when(g.endedAt)}</small></span>
-            <span className="ri-go">Review ›</span>
+            <span className="ri-main"><b>vs {g.players[g.seat === 0 ? 1 : 0]}</b><small>{g.rated ? 'Rated' : 'Casual'} · {g.reason} · {g.turns} turn{g.turns === 1 ? '' : 's'} · {when(g.endedAt)}</small></span>
+            <span className="ri-go">Review <Icon name="chevron-right" size={15} /></span>
           </button>
         );
       })}
@@ -224,67 +249,32 @@ function MyGames({ me, onReplay }: { me: PublicUser; onReplay: OpenReplay }) {
   );
 }
 
-function Leaderboard({ me }: { me: PublicUser | null }) {
-  const [rows, setRows] = useState<PublicUser[] | null>(null);
-  useEffect(() => { client.leaderboard().then(setRows).catch(() => setRows([])); }, [me?.rating]);
+/** Friends, live games and rankings have their own pages now; the lobby links to them. */
+function LobbyLinks({ view, onSocial, onLeaderboard }: { view: OnlineView; onSocial: (t: SocialTab) => void; onLeaderboard: () => void }) {
+  const user = view.user;
+  const account = !!user && !user.guest;
+  const friends = view.friends?.friends ?? [];
+  const on = friends.filter((f) => f.presence && f.presence.status !== 'offline').length;
+  const req = view.friends?.incoming.length ?? 0;
   return (
-    <section className="lobby-card leaderboard">
-      <h2>Leaderboard</h2>
-      {rows === null ? <p>Loading…</p> : rows.length === 0 ? <p>No rated games yet. Sign up and play a Quick Match to get on the board.</p> : (
-        <ol>
-          {rows.slice(0, 10).map((u, i) => (
-            <li key={u.id} className={u.id === me?.id ? 'me' : ''}>
-              <span className="lb-rank">{i + 1}</span>
-              <span className="lb-name">{u.name}</span>
-              <span className="lb-rating">{u.rating}</span>
-            </li>
-          ))}
-        </ol>
-      )}
+    <section className="lobby-card lobby-links" data-testid="lobby-links">
+      <button className="lobby-link" onClick={() => onSocial('friends')} data-testid="lobby-to-friends">
+        <span className="ll-icon"><Icon name="users" size={22} /></span>
+        <span className="ll-text"><b>Friends {req > 0 && <span className="count-pill">{req} new</span>}</b>
+          <small>{!account ? 'Sign up to add friends and challenge them' : friends.length ? `${on} of ${friends.length} online · challenge or watch` : 'Find players by name'}</small></span>
+        <span className="chev"><Icon name="chevron-right" size={20} /></span>
+      </button>
+      <button className="lobby-link" onClick={() => onSocial('live')} data-testid="lobby-to-live">
+        <span className="ll-icon"><Icon name="radio" size={22} /></span>
+        <span className="ll-text"><b>Live games</b><small>Watch games in progress — top-rated first</small></span>
+        <span className="chev"><Icon name="chevron-right" size={20} /></span>
+      </button>
+      <button className="lobby-link" onClick={onLeaderboard} data-testid="lobby-to-leaderboard">
+        <span className="ll-icon"><Icon name="trophy" size={22} /></span>
+        <span className="ll-text"><b>Leaderboard</b><small>{account ? `You: ${user!.rating}` : 'Top rated players'}</small></span>
+        <span className="chev"><Icon name="chevron-right" size={20} /></span>
+      </button>
     </section>
-  );
-}
-
-function AuthModal({ mode, onMode, onClose }: { mode: 'login' | 'signup'; onMode: (m: 'login' | 'signup') => void; onClose: () => void }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true);
-    setErr(null);
-    try {
-      if (mode === 'signup') await client.signup(email, password, name);
-      else await client.login(email, password);
-      onClose();
-    } catch (x) {
-      setErr(x instanceof Error ? x.message : 'Something went wrong');
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="overlay" onClick={onClose}>
-      <form className="panel auth" onClick={(e) => e.stopPropagation()} onSubmit={submit} data-testid="auth-modal">
-        <div className="seg seg-small">
-          <button type="button" className={`seg-btn ${mode === 'signup' ? 'on' : ''}`} onClick={() => onMode('signup')}>Sign up</button>
-          <button type="button" className={`seg-btn ${mode === 'login' ? 'on' : ''}`} onClick={() => onMode('login')}>Log in</button>
-        </div>
-        {mode === 'signup' && <p className="auth-note">Your guest stats carry over. Rated Quick Match unlocks with an account.</p>}
-        <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
-        <label>Password<input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} /></label>
-        {mode === 'signup' && (
-          <label><span>Display name <small>(optional)</small></span><input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} pattern="[A-Za-z0-9 _\-]{3,20}" /></label>
-        )}
-        {err && <div className="auth-error">{err}</div>}
-        <div className="panel-actions">
-          <button className="btn primary" type="submit" disabled={busy}>{busy ? '…' : mode === 'signup' ? 'Create account' : 'Log in'}</button>
-          <button className="btn ghost" type="button" onClick={onClose}>Cancel</button>
-        </div>
-      </form>
-    </div>
   );
 }
 
@@ -295,7 +285,7 @@ function RankedNote() {
   const done = order.filter((id) => p.lessons[id]).length;
   return (
     <p className={`ranked-note ${p.rankedUnlocked ? 'on' : ''}`} data-testid="ranked-note">
-      {p.rankedUnlocked ? '🎓 Ranked unlocked — learning path complete' : `📘 Learning path ${done}/${order.length} — finish it to unlock ranked`}
+      <Icon name={p.rankedUnlocked ? 'graduation-cap' : 'book'} size={16} /> {p.rankedUnlocked ? 'Ranked unlocked — learning path complete' : `Learning path ${done}/${order.length} — finish it to unlock ranked`}
     </p>
   );
 }

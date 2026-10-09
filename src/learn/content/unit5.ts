@@ -9,7 +9,7 @@ export const unit5: Unit = {
   color: '#ffd98a',
   lessons: [
     {
-      id: 'f1', title: 'Defending vs 3-move turns', icon: '🛡', minutes: 3,
+      id: 'f1', title: 'Defending vs 3-move turns', icon: 'shield', minutes: 3,
       steps: [
         {
           kind: 'explain', title: 'Ask: what if they draw a 3?',
@@ -36,7 +36,7 @@ export const unit5: Unit = {
       ],
     },
     {
-      id: 'f2', title: 'Check to cut plans short', icon: '✂', minutes: 2,
+      id: 'f2', title: 'Check to cut plans short', icon: 'scissors', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Spend their moves for them',
@@ -57,7 +57,7 @@ export const unit5: Unit = {
       ],
     },
     {
-      id: 'f3', title: 'King safety & the clock', icon: '⌛', minutes: 2,
+      id: 'f3', title: 'King safety & the clock', icon: 'timer', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Ten minutes each',
@@ -83,7 +83,7 @@ export const unit5: Unit = {
       ],
     },
     {
-      id: 'f4', title: 'Chess Uno tactics', icon: '✷', minutes: 3,
+      id: 'f4', title: 'Chess Uno tactics', icon: 'swords', minutes: 3,
       steps: [
         {
           kind: 'explain', title: 'Tricks normal chess doesn’t have',

@@ -4,6 +4,7 @@ import { canPlayCard, cardBlockReason, remainingMs, reverseExhausted, type GameA
 import type { ActionKind } from '../rules/cards';
 import { CardBack, CardFace } from './Card';
 import { Piece, type PieceSet } from './pieces';
+import { Icon } from './icons';
 
 export function formatClock(ms: number): string {
   if (ms < 20_000) {
@@ -169,7 +170,7 @@ export function PlayerZone(props: Props) {
                   onClick={() => playable && setConfirmId(confirmId === c.id ? null : c.id)}
                 >
                   <CardFace kind={c.kind} size="sm" className="hand-card" />
-                  {active && state.phase === 'start' && !playable && <span className="lock">🔒</span>}
+                  {active && state.phase === 'start' && !playable && <span className="lock"><Icon name="lock" size={16} label="Locked" /></span>}
                 </button>
                 {confirmId === c.id && playable && (
                   <div className="confirm-pop">
@@ -194,19 +195,19 @@ export function PlayerZone(props: Props) {
           <div className={`avatar avatar-${color}`}><Piece piece={color === 'w' ? 'K' : 'k'} set={pieceSet} /></div>
           <div>
             <div className="zone-name">{state.players[player].name}{isBot && <span className="bot-tag">BOT</span>}{props.badge}</div>
-            <div className="zone-side">{sideName} · {hand.length} held{reverseUsed && <span className="rev-used-mini" title={usedTip}> · ⇄ used</span>}</div>
+            <div className="zone-side">{sideName} · {hand.length} held{reverseUsed && <span className="rev-used-mini" title={usedTip}> · <Icon name="reverse" size={13} /> used</span>}</div>
           </div>
         </div>
         {!remote && (props.onPause || props.onResign) && state.phase !== 'over' && (
           <div className="zone-menu">
-            {props.onPause && <button className="icon-btn" onClick={props.onPause} aria-label="Pause">❚❚</button>}
+            {props.onPause && <button className="icon-btn" onClick={props.onPause} aria-label="Pause"><Icon name="pause" size={18} /></button>}
             {props.onResign && (confirmResign ? (
               <>
                 <button className="btn danger tiny" onClick={() => { setConfirmResign(false); props.onResign!(); }}>Resign?</button>
                 <button className="btn ghost tiny" onClick={() => setConfirmResign(false)}>No</button>
               </>
             ) : (
-              <button className="icon-btn" onClick={() => setConfirmResign(true)} aria-label="Resign">⚑</button>
+              <button className="icon-btn" onClick={() => setConfirmResign(true)} aria-label="Resign"><Icon name="flag" size={18} /></button>
             ))}
           </div>
         )}

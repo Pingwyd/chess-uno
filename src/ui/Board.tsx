@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useBoardInteraction } from './useBoardInteraction';
+import { reducedMotion } from './settings/store';
 import { type Color, colorOfPiece, fileOf, rankOf, squareName } from '../rules/chess';
 import type { GameState } from '../rules/game';
 import { Piece, type PieceSet } from './pieces';
@@ -44,7 +45,7 @@ export function Board({ state, bottomColor, faceTopPieces, topColor, interactive
     }
   }, [bottomColor]);
 
-  const { selected, targets, mover, moveBadge, fromSquares, badgeColor, checked, click } = useBoardInteraction(state, interactive, onMove, onPromotion);
+  const { selected, hintTargets: targets, mover, moveBadge, fromSquares, badgeColor, checked, click } = useBoardInteraction(state, interactive, onMove, onPromotion);
 
   const squares = [];
   for (let row = 0; row < 8; row++) {
@@ -110,6 +111,7 @@ function PieceSlot({ anim, children }: { anim: LastMoveAnim | null; children: Re
   useLayoutEffect(() => {
     if (!anim || !ref.current || done.current === anim.key) return;
     done.current = anim.key;
+    if (reducedMotion()) return;
     const dx = (fileOf(anim.from) - fileOf(anim.to)) * 100;
     const dy = (rankOf(anim.to) - rankOf(anim.from)) * 100;
     ref.current.animate(

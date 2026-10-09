@@ -120,6 +120,7 @@ export interface Badge {
   id: string;
   name: string;
   desc: string;
+  /** Lucide icon name (see src/ui/icons.tsx). */
   icon: string;
   /** Cosmetic unlocked by the badge. */
   reward?: { side: 'w'; skin: WhiteSkin } | { side: 'b'; skin: BlackSkin };
@@ -129,17 +130,17 @@ export interface Badge {
 const unitById = (shape: PathShape, id: string) => shape.units.find((u) => u.id === id) ?? { lessons: ['__missing__'] };
 
 export const BADGES: Badge[] = [
-  { id: 'first-steps', name: 'First Steps', icon: '👣', desc: 'Finish your first lesson.', earned: (p) => Object.keys(p.lessons).length > 0 },
-  { id: 'board-ready', name: 'Board Ready', icon: '♟', desc: 'Complete Chess basics (or test out).', earned: (p, c) => unitDone(p, unitById(c.shape, 'basics')) },
-  { id: 'card-shark', name: 'Card Shark', icon: '🂡', desc: 'Complete The cards.', reward: { side: 'w', skin: 'frost' }, earned: (p, c) => unitDone(p, unitById(c.shape, 'cards')) },
-  { id: 'patient-hunter', name: 'Patient Hunter', icon: '⏳', desc: 'Complete Check ends your turn.', reward: { side: 'b', skin: 'rose' }, earned: (p, c) => unitDone(p, unitById(c.shape, 'check')) },
-  { id: 'turntable', name: 'Turntable', icon: '⇄', desc: 'Complete Skip & Reverse.', earned: (p, c) => unitDone(p, unitById(c.shape, 'actions')) },
-  { id: 'graduate', name: 'Graduate', icon: '🎓', desc: 'Finish the whole path. Ranked play unlocked!', reward: { side: 'w', skin: 'gilded' }, earned: (p, c) => pathDone(p, c.shape) },
-  { id: 'perfectionist', name: 'Perfectionist', icon: '★', desc: 'Earn 3 stars on 5 lessons.', earned: (p) => Object.values(p.lessons).filter((l) => l.stars === 3 && !l.tested).length >= 5 },
-  { id: 'on-fire', name: 'On Fire', icon: '🔥', desc: 'Reach a 3-day streak.', earned: (p, c) => streak(p, c.today) >= 3 },
-  { id: 'unstoppable', name: 'Unstoppable', icon: '☄', desc: 'Reach a 7-day streak.', reward: { side: 'b', skin: 'aurora' }, earned: (p, c) => streak(p, c.today) >= 7 },
-  { id: 'daily-devotee', name: 'Daily Devotee', icon: '📅', desc: 'Solve 3 daily puzzles.', earned: (p) => Object.keys(p.daily).length >= 3 },
-  { id: 'scholar', name: 'Scholar', icon: '📜', desc: 'Earn 500 XP.', earned: (p) => p.xp >= 500 },
+  { id: 'first-steps', name: 'First Steps', icon: 'footprints', desc: 'Finish your first lesson.', earned: (p) => Object.keys(p.lessons).length > 0 },
+  { id: 'board-ready', name: 'Board Ready', icon: 'pawn', desc: 'Complete Chess basics (or test out).', earned: (p, c) => unitDone(p, unitById(c.shape, 'basics')) },
+  { id: 'card-shark', name: 'Card Shark', icon: 'spade', desc: 'Complete The cards.', reward: { side: 'w', skin: 'frost' }, earned: (p, c) => unitDone(p, unitById(c.shape, 'cards')) },
+  { id: 'patient-hunter', name: 'Patient Hunter', icon: 'hourglass', desc: 'Complete Check ends your turn.', reward: { side: 'b', skin: 'rose' }, earned: (p, c) => unitDone(p, unitById(c.shape, 'check')) },
+  { id: 'turntable', name: 'Turntable', icon: 'reverse', desc: 'Complete Skip & Reverse.', earned: (p, c) => unitDone(p, unitById(c.shape, 'actions')) },
+  { id: 'graduate', name: 'Graduate', icon: 'graduation-cap', desc: 'Finish the whole path. Ranked play unlocked!', reward: { side: 'w', skin: 'gilded' }, earned: (p, c) => pathDone(p, c.shape) },
+  { id: 'perfectionist', name: 'Perfectionist', icon: 'star', desc: 'Earn 3 stars on 5 lessons.', earned: (p) => Object.values(p.lessons).filter((l) => l.stars === 3 && !l.tested).length >= 5 },
+  { id: 'on-fire', name: 'On Fire', icon: 'flame', desc: 'Reach a 3-day streak.', earned: (p, c) => streak(p, c.today) >= 3 },
+  { id: 'unstoppable', name: 'Unstoppable', icon: 'rocket', desc: 'Reach a 7-day streak.', reward: { side: 'b', skin: 'aurora' }, earned: (p, c) => streak(p, c.today) >= 7 },
+  { id: 'daily-devotee', name: 'Daily Devotee', icon: 'calendar-check', desc: 'Solve 3 daily puzzles.', earned: (p) => Object.keys(p.daily).length >= 3 },
+  { id: 'scholar', name: 'Scholar', icon: 'scroll', desc: 'Earn 500 XP.', earned: (p) => p.xp >= 500 },
 ];
 
 export const SKIN_NAMES: Record<WhiteSkin | BlackSkin, string> = {

@@ -9,7 +9,7 @@ export const unit3: Unit = {
   color: '#ff5470',
   lessons: [
     {
-      id: 'd1', title: 'Check ends your turn', icon: '⚡', minutes: 2,
+      id: 'd1', title: 'Check ends your turn', icon: 'hand', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'The big rule',
@@ -36,7 +36,7 @@ export const unit3: Unit = {
       ],
     },
     {
-      id: 'd2', title: 'Hold back the check', icon: '⏳', minutes: 3,
+      id: 'd2', title: 'Hold back the check', icon: 'hourglass', minutes: 3,
       steps: [
         {
           kind: 'explain', title: 'Mate on the last move',
@@ -64,7 +64,7 @@ export const unit3: Unit = {
       ],
     },
     {
-      id: 'd3', title: 'Check as the final move', icon: '🎯', minutes: 2,
+      id: 'd3', title: 'Check as the final move', icon: 'target', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Grab first, check last',
@@ -86,7 +86,7 @@ export const unit3: Unit = {
       ],
     },
     {
-      id: 'd4', title: 'When checks waste moves', icon: '♻', minutes: 2,
+      id: 'd4', title: 'When checks waste moves', icon: 'recycle', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Count before you check',

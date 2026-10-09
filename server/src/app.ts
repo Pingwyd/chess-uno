@@ -25,7 +25,7 @@ export async function createApp(overrides: Partial<ServerConfig> = {}): Promise<
   const auth = new Auth(db, config.jwtSecret);
   const hub = new Hub(db, auth, config);
   const reviews = new ReviewService(db);
-  const server = createServer(createHttpHandler(db, auth, config, reviews));
+  const server = createServer(createHttpHandler(db, auth, config, reviews, hub));
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 16 * 1024 });
   wss.on('connection', (ws, req) => hub.handleConnection(ws, req));
 

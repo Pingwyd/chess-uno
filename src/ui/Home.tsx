@@ -4,20 +4,17 @@ import type { BotLevel } from '../engine/bot';
 import { CardFace } from './Card';
 import { Piece, type PieceSet } from './pieces';
 import type { GameSetup } from './useGame';
-import { has3D, type BoardMode } from './BoardView';
 import { useProgress } from '../learn/store';
 import { OUTLINE_SHAPE as PATH_SHAPE, lessonTitle } from '../learn/outline';
 import { localDay, nextLesson, pathOrder, streak, utcDay } from '../learn/progress';
 import type { LearnTab } from './learn/LearnScreen';
 import { RecentGames, type OpenReplay } from './RecentGames';
+import { HowToPlay } from './HowToPlay';
+import { Icon } from './icons';
 
+/** Home stays focused: play modes, Learn and recent games. Profile, settings, social and rankings live in the app nav. */
 interface Props {
   pieceSet: PieceSet;
-  sound: boolean;
-  boardMode: BoardMode;
-  onBoardMode: (m: BoardMode) => void;
-  onPieceSet: (s: PieceSet) => void;
-  onSound: (on: boolean) => void;
   onStart: (setup: GameSetup) => void;
   onOnline: () => void;
   onLearn: (tab: LearnTab) => void;
@@ -30,7 +27,7 @@ const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
   { id: 'hard', name: 'Rook', blurb: 'Hard', piece: 'R' },
 ];
 
-export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn, onReplay }: Props) {
+export function Home({ pieceSet, onStart, onOnline, onLearn, onReplay }: Props) {
   const progress = useProgress();
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
@@ -56,13 +53,14 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
           <span className="logo-uno">UNO</span>
         </h1>
         <p className="tagline">Draw a card. Make that many moves. Outwit the deck.</p>
+        <button className="link-btn how-link" onClick={() => setRules(true)} data-testid="how-to-play">How to play <Icon name="chevron-right" size={15} /></button>
       </div>
 
       <LearnCard progress={progress} onLearn={onLearn} />
 
       <div className="modes">
         <button className="mode-card mode-pass" onClick={() => onStart({ mode: 'pass', botLevel: 'medium', humanColor: 'w' })} data-testid="mode-pass">
-          <div className="mode-icon">⇅</div>
+          <div className="mode-icon"><Icon name="arrow-up-down" size={26} /></div>
           <div>
             <h2>Pass &amp; Play</h2>
             <p>Two players, one device, face to face. Works offline.</p>
@@ -71,7 +69,7 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
 
         <div className="mode-card mode-bot">
           <div className="mode-head">
-            <div className="mode-icon">⚙</div>
+            <div className="mode-icon"><Icon name="bot" size={26} /></div>
             <div>
               <h2>Vs Bot</h2>
               <p>The bot plans whole multi-move turns.</p>
@@ -96,42 +94,20 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
         </div>
 
         <button className="mode-card mode-online" onClick={onOnline} data-testid="mode-online">
-          <div className="mode-icon">◎</div>
+          <div className="mode-icon"><Icon name="globe" size={26} /></div>
           <div>
             <h2>Online</h2>
-            <p>Quick Match, invite a friend by link or code, watch live games.</p>
+            <p>Quick Match or invite a friend by link or code.</p>
           </div>
         </button>
       </div>
 
       <RecentGames onOpen={onReplay} />
 
-      <div className="home-foot">
-        <div className="seg seg-small" role="radiogroup" aria-label="Piece set">
-          <button className={`seg-btn ${pieceSet === 'arcane' ? 'on' : ''}`} onClick={() => onPieceSet('arcane')}>Arcane Forge</button>
-          <button className={`seg-btn ${pieceSet === 'classic' ? 'on' : ''}`} onClick={() => onPieceSet('classic')}>Classic</button>
-        </div>
-        <div className="seg seg-small seg-board" role="radiogroup" aria-label="Board">
-          <button className={`seg-btn ${boardMode === '2d' ? 'on' : ''}`} onClick={() => onBoardMode('2d')} data-testid="board-2d">2D board</button>
-          <button className={`seg-btn ${boardMode === '3d' ? 'on' : ''}`} onClick={() => onBoardMode('3d')} disabled={!has3D()} title={has3D() ? '' : 'WebGL is not available on this device'} data-testid="board-3d-opt">3D board</button>
-        </div>
-        <button className="btn ghost small" onClick={() => onSound(!sound)}>{sound ? '🔊 Sound on' : '🔈 Sound off'}</button>
-        <button className="btn ghost small" onClick={() => setRules(true)}>How to play</button>
-      </div>
-
       {rules && (
         <div className="overlay" onClick={() => setRules(false)}>
           <div className="panel rules" onClick={(e) => e.stopPropagation()}>
-            <h2>How to play</h2>
-            <ul>
-              <li><b>Normal chess</b>, White first, 10 minutes each. Run out of time and you lose.</li>
-              <li>Start each turn by <b>drawing a card</b>: a <b>1, 2 or 3</b> means that many moves in a row. 3s are rare: the 52-card deck has 19 ones, 18 twos and just 5 threes (about 1.7 moves a turn on average), plus 6 Skip and 4 Reverse.</li>
-              <li><b>Giving check ends your turn</b> immediately. Set up quietly, then check on your last move.</li>
-              <li>White's very first turn is capped at <b>1 move</b>.</li>
-              <li><b>Skip</b> and <b>Reverse</b> go into your hand (max 2). Play one at the start of a turn, before drawing.</li>
-              <li><b>Skip:</b> take your turn, then your opponent's next turn is skipped. Check cancels Skip.</li>
-              <li><b>Reverse:</b> swap sides with your opponent (uses your turn). Unlocks after 5 turns each, no Reverse straight back, and <b>only one Reverse per player per game</b>. After yours is used, any Reverse you draw is discarded and you draw again.</li>
-            </ul>
+            <HowToPlay />
             <button className="btn primary" onClick={() => setRules(false)}>Got it</button>
           </div>
         </div>
@@ -149,16 +125,16 @@ function LearnCard({ progress, onLearn }: { progress: ReturnType<typeof useProgr
   return (
     <section className="learn-home" data-testid="learn-card">
       <button className="learn-home-main" onClick={() => onLearn('path')} data-testid="open-learn">
-        <div className="learn-home-icon">🎓</div>
+        <div className="learn-home-icon"><Icon name="graduation-cap" size={30} /></div>
         <div className="learn-home-text">
           <h2>Learn</h2>
           <p>{next ? `${done ? 'Continue' : 'Start'}: ${lessonTitle(next)}` : 'Path complete — ranked unlocked!'}</p>
           <div className="learn-home-meter"><div style={{ width: `${(done / total) * 100}%` }} /></div>
-          <small>{done}/{total} lessons · ⚡ {progress.xp} XP · 🔥 {st} day{st === 1 ? '' : 's'}</small>
+          <small className="learn-home-stats"><span>{done}/{total} lessons</span><span><Icon name="zap" size={13} /> {progress.xp} XP</span><span><Icon name="flame" size={13} /> {st} day{st === 1 ? '' : 's'}</span></small>
         </div>
       </button>
       <button className={`learn-home-daily ${dailyDone ? 'done' : ''}`} onClick={() => onLearn('daily')} data-testid="open-daily">
-        <span>{dailyDone ? '✓' : '📅'}</span>
+        <span><Icon name={dailyDone ? 'check' : 'calendar'} size={28} /></span>
         <b>Daily puzzle</b>
         <small>{dailyDone ? 'Solved' : '+20 XP'}</small>
       </button>

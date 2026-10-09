@@ -9,7 +9,7 @@ import {
   applyAction, createGame, remainingMs, type GameAction, type GameState, type PlayerId,
 } from '../../src/rules/game';
 import {
-  CHAT_MAX_LENGTH, EMOTES, type ChatMessage, type ClientMsg, type RoomResultInfo, type RoomSnapshot, type SeatInfo, type ServerMsg,
+  CHAT_MAX_LENGTH, EMOTES, type ChatMessage, type ClientMsg, type FriendInfo, type RoomResultInfo, type RoomSnapshot, type SeatInfo, type ServerMsg,
 } from '../../src/net/protocol';
 import type { UsersTable } from './db';
 import { redactState } from './redact';
@@ -21,6 +21,10 @@ export interface Client {
   /** Code of the room this client is spectating. */
   spectating: string | null;
   chatTimes: number[];
+  /** Accepted friends (accounts only), cached for presence and the live-games list. */
+  friendIds?: Set<string>;
+  /** Subscribed to live-games updates. */
+  liveOn?: boolean;
 }
 
 interface Seat {
@@ -37,6 +41,8 @@ export interface RoomHost {
   onStart(room: Room): Promise<void> | void;
   onFinish(room: Room): Promise<{ ratingChange: [number, number] | null; ratingAfter: [number, number] | null }>;
   onClosed(room: Room): void;
+  /** Something the live-games list shows changed (turn, spectators). */
+  onChange?(room: Room): void;
 }
 
 const PLAYER_ACTIONS = new Set(['draw', 'playCard', 'resolveOverflow', 'move', 'resign']);
@@ -62,9 +68,12 @@ export class Room {
   /** Authoritative state at the start of each turn (for delayed spectating). */
   private turnStarts: GameState[] = [];
   private lastTurnNumber = -1;
-  private startedAt = 0;
+  startedAt = 0;
+  /** Friend challenged into this private room (shown in the waiting room). */
+  invitee: FriendInfo | null = null;
 
-  constructor(readonly code: string, readonly rated: boolean, private host: RoomHost) {}
+  /** `isPrivate`: invite-link / friend-challenge rooms — only friends of the players see them in Live games. */
+  constructor(readonly code: string, readonly rated: boolean, private host: RoomHost, readonly isPrivate = false) {}
 
   seatOf(userId: string): PlayerId | null {
     if (this.seats[0]?.user.id === userId) return 0;
@@ -109,7 +118,7 @@ export class Room {
     s.graceUntil = null;
     if (s.graceTimer) clearTimeout(s.graceTimer);
     s.graceTimer = null;
-    if (this.status === 'waiting') client.send({ t: 'roomCreated', code: this.code });
+    if (this.status === 'waiting') client.send({ t: 'roomCreated', code: this.code, ...(this.invitee ? { invitee: this.invitee } : {}) });
     else {
       this.broadcast();
       client.send({ t: 'chatHistory', msgs: this.chat });
@@ -117,7 +126,7 @@ export class Room {
   }
 
   detach(client: Client) {
-    if (this.spectators.delete(client)) { this.broadcast(); return; }
+    if (this.spectators.delete(client)) { this.broadcast(); this.host.onChange?.(this); return; }
     const seat = this.seatOf(client.user.id);
     if (seat === null) return;
     const s = this.seats[seat]!;
@@ -145,6 +154,7 @@ export class Room {
       client.send({ t: 'chatHistory', msgs: this.chat });
     }
     this.broadcast();
+    this.host.onChange?.(this);
   }
 
   handle(client: Client, msg: ClientMsg) {
@@ -197,6 +207,7 @@ export class Room {
     this.lastTurnNumber = this.state.turnNumber;
     this.turnStarts.push(this.state);
     if (this.turnStarts.length > 3) this.turnStarts.shift();
+    this.host.onChange?.(this);
   }
 
   private scheduleClock() {

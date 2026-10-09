@@ -5,6 +5,7 @@ import { BoardView } from '../BoardView';
 import type { LastMoveAnim } from '../Board';
 import { CardFace } from '../Card';
 import { BoardBox, prefersReducedMotion, type BoardEnv } from './shared';
+import { Icon } from '../icons';
 
 /** Auto-playing board animation for explainer steps, driven by the real rules engine. */
 export function DemoBoard({ demo, env }: { demo: Demo; env: BoardEnv }) {
@@ -34,7 +35,7 @@ export function DemoBoard({ demo, env }: { demo: Demo; env: BoardEnv }) {
   else if (fresh.some((e) => e.type === 'turnEnd' && e.reason === 'check')) caption = `Check! ${mover}’s turn ends right here.`;
   else if (fresh.some((e) => e.type === 'playCard' && e.card.kind === 'skip')) caption = `${mover} plays Skip — two turns in a row.`;
   else if (fresh.some((e) => e.type === 'skipped')) caption = 'Opponent skipped — go again!';
-  else if (fresh.some((e) => e.type === 'draw' && e.toHand)) caption = `${mover} drew an action card → hand, draws again.`;
+  else if (fresh.some((e) => e.type === 'draw' && e.toHand)) caption = `${mover} drew an action card into their hand and draws again.`;
   else {
     const mv = fresh.find((e) => e.type === 'move');
     if (mv && mv.type === 'move') {
@@ -55,7 +56,7 @@ export function DemoBoard({ demo, env }: { demo: Demo; env: BoardEnv }) {
       <div className="demo-bar">
         {card ? <CardFace kind={card} size="xs" /> : <span className="demo-dot" />}
         <span className="demo-caption" data-testid="demo-caption">{caption}</span>
-        <button className="btn ghost small" onClick={() => { setPlaying(true); setI(0); }} aria-label="Replay demo">↻ Replay</button>
+        <button className="btn ghost small" onClick={() => { setPlaying(true); setI(0); }} aria-label="Replay demo"><Icon name="rotate-cw" size={15} /> Replay</button>
       </div>
     </div>
   );

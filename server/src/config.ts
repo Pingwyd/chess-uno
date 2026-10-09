@@ -1,3 +1,5 @@
+import { CHALLENGE_TTL_MS } from '../../src/net/protocol';
+
 export interface ServerConfig {
   port: number;
   /** `sqlite:<path>` / plain path / `:memory:` for SQLite, or `postgres://…` for Postgres. */
@@ -12,6 +14,8 @@ export interface ServerConfig {
   /** Matchmaking: base rating window and widening per second waited. */
   matchWindow: number;
   matchWidenPerSec: number;
+  /** How long a friend challenge stays open (5 minutes). */
+  challengeTtlMs: number;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -28,5 +32,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     corsOrigin: env.CORS_ORIGIN ?? '*',
     matchWindow: Number(env.MATCH_WINDOW ?? 100),
     matchWidenPerSec: Number(env.MATCH_WIDEN_PER_SEC ?? 25),
+    challengeTtlMs: Number(env.CHALLENGE_TTL_MS ?? CHALLENGE_TTL_MS),
   };
 }

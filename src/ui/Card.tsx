@@ -1,4 +1,5 @@
 import type { CardKind } from '../rules/cards';
+import { Icon } from './icons';
 
 const LABEL: Record<CardKind, string> = { '1': '1', '2': '2', '3': '3', skip: 'Skip', reverse: 'Reverse' };
 
@@ -28,12 +29,12 @@ export function CardFace({ kind, size = 'md', className = '' }: { kind: CardKind
   return (
     <div className={`card card-${size} card-${kind} ${className}`} aria-label={`${LABEL[kind]} card`}>
       <div className="card-inner">
-        <span className="card-corner tl">{kind === 'skip' ? '⊘' : kind === 'reverse' ? '⇄' : kind}</span>
+        <span className="card-corner tl">{kind === 'skip' ? <Icon name="skip" size="1em" strokeWidth={2.6} /> : kind === 'reverse' ? <Icon name="reverse" size="1em" strokeWidth={2.6} /> : kind}</span>
         <div className="card-oval">
           <Glyph kind={kind} />
         </div>
         <span className="card-caption">{kind === 'skip' || kind === 'reverse' ? LABEL[kind] : kind === '1' ? 'move' : 'moves'}</span>
-        <span className="card-corner br">{kind === 'skip' ? '⊘' : kind === 'reverse' ? '⇄' : kind}</span>
+        <span className="card-corner br">{kind === 'skip' ? <Icon name="skip" size="1em" strokeWidth={2.6} /> : kind === 'reverse' ? <Icon name="reverse" size="1em" strokeWidth={2.6} /> : kind}</span>
       </div>
     </div>
   );

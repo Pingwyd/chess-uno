@@ -9,7 +9,7 @@ export const unit2: Unit = {
   color: '#2fe6d6',
   lessons: [
     {
-      id: 'c1', title: 'Drawing a card', icon: '🂠', minutes: 2,
+      id: 'c1', title: 'Drawing a card', icon: 'spade', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Every turn starts with a card',
@@ -40,7 +40,7 @@ export const unit2: Unit = {
       ],
     },
     {
-      id: 'c2', title: 'Moves in a row', icon: '⇶', minutes: 3,
+      id: 'c2', title: 'Moves in a row', icon: 'fast-forward', minutes: 3,
       steps: [
         {
           kind: 'explain', title: 'Plan the whole turn',
@@ -51,7 +51,7 @@ export const unit2: Unit = {
         { kind: 'puzzle', puzzle: {
           id: 'c2-knight', prompt: 'You drew a 3. Hop the knight over and capture the rook.',
           fen: '7k/8/5r2/8/8/8/PP6/1N4K1 w - - 0 1', cards: ['3'], goals: [{ type: 'captureType', piece: 'r' }],
-          solution: ['b1d2', 'd2e4', 'e4f6'], hint: 'b1 → d2 → e4, and the rook on f6 is a knight’s jump away.',
+          solution: ['b1d2', 'd2e4', 'e4f6'], hint: 'b1 to d2 to e4, and the rook on f6 is a knight’s jump away.',
           explain: 'Three hops, one capture. Any route that gets there works.',
         } },
         { kind: 'puzzle', puzzle: {
@@ -74,7 +74,7 @@ export const unit2: Unit = {
       ],
     },
     {
-      id: 'c3', title: 'Every move counts', icon: '⚖', minutes: 2,
+      id: 'c3', title: 'Every move counts', icon: 'scale', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Moves are mandatory',
@@ -103,7 +103,7 @@ export const unit2: Unit = {
       ],
     },
     {
-      id: 'c4', title: 'Quiet setup, then mate', icon: '✦', minutes: 3,
+      id: 'c4', title: 'Quiet setup, then mate', icon: 'sparkles', minutes: 3,
       steps: [
         {
           kind: 'explain', title: 'Two quiet moves, then mate',
@@ -131,7 +131,7 @@ export const unit2: Unit = {
       ],
     },
     {
-      id: 'c5', title: 'Escape, then strike', icon: '↯', minutes: 2,
+      id: 'c5', title: 'Escape, then strike', icon: 'zap', minutes: 2,
       steps: [
         {
           kind: 'explain', title: 'Start of turn in check',

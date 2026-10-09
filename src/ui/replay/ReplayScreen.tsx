@@ -16,6 +16,7 @@ import { CardBack, CardFace } from '../Card';
 import { Piece, type PieceSet } from '../pieces';
 import { formatClock } from '../PlayerZone';
 import './replay.css';
+import { Icon } from '../icons';
 
 export type ReplaySource = { id: string } | { gameId: string };
 
@@ -29,9 +30,11 @@ interface Props {
   onClose: () => void;
 }
 
-export const LABEL_ICON: Record<Label, string> = {
-  brilliant: '!!', great: '!', best: '★', good: '✓', inaccuracy: '?!', mistake: '?', blunder: '??',
+/** Chess annotation marks (!!, !, ?!, ?, ??); "best" and "good" use Lucide icons. */
+export const LABEL_ICON: Record<Label, string | null> = {
+  brilliant: '!!', great: '!', best: null, good: null, inaccuracy: '?!', mistake: '?', blunder: '??',
 };
+const labelMark = (l: Label) => LABEL_ICON[l] ?? <Icon name={l === 'best' ? 'star' : 'check'} size="1em" strokeWidth={2.6} />;
 
 export default function ReplayScreen(props: Props) {
   const [record, setRecord] = useState<GameRecord | null>(null);
@@ -60,7 +63,7 @@ export default function ReplayScreen(props: Props) {
   if (error) {
     return (
       <div className="replay replay-empty" data-testid="replay-error">
-        <header className="game-bar"><button className="icon-btn" onClick={props.onClose} aria-label="Back">‹</button><div className="game-bar-title">Replay</div></header>
+        <header className="game-bar"><button className="icon-btn" onClick={props.onClose} aria-label="Back"><Icon name="chevron-left" size={20} /></button><div className="game-bar-title">Replay</div></header>
         <div className="replay-msg"><p>{error}</p><button className="btn primary" onClick={props.onClose}>Back</button></div>
       </div>
     );
@@ -211,7 +214,7 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
 
   const header = (
     <header className="game-bar replay-bar">
-      <button className="icon-btn" onClick={onClose} aria-label="Back" data-testid="replay-close">‹</button>
+      <button className="icon-btn" onClick={onClose} aria-label="Back" data-testid="replay-close"><Icon name="chevron-left" size={20} /></button>
       <div className="game-bar-title replay-title">
         <span>{record.config.players[0].name} <i>vs</i> {record.config.players[1].name}</span>
         <small>{modeLabel(record)} · {resultLine(record.result, record.config.players.map((p) => p.name) as [string, string])}</small>
@@ -418,7 +421,7 @@ function frameText(f: Frame, names: [string, string]): { text: string; tone: str
   const ev = f.state.events as GameEvent[];
   const pick = <T extends GameEvent['type']>(t: T) => ev.find((e) => e.type === t) as Extract<GameEvent, { type: T }> | undefined;
   const over = pick('gameOver');
-  if (over) return { text: over.result.winner === null ? 'Draw' : `${names[over.result.winner]} wins`, tone: 'over' };
+  if (over) return { text: over.result.winner === null ? 'Draw' : (names[over.result.winner] === 'You' ? 'You win' : `${names[over.result.winner]} wins`), tone: 'over' };
   const rev = pick('reverse');
   const burn = pick('burnCard');
   if (rev) return { text: burn ? 'REVERSE! Sides swapped (their other Reverse is now dead)' : 'REVERSE! Sides swapped', tone: 'reverse' };
@@ -470,13 +473,13 @@ function Controls({ fi, nav, frames, playing, speed, review, onGo, onStep, onTur
         <input type="range" min={0} max={last} value={pos} onChange={(e) => onGo(nav[Number(e.target.value)], false)} aria-label="Scrub through the game" data-testid="scrub" />
       </div>
       <div className="ctl-row">
-        <button className="ctl" onClick={() => onGo(0, false)} aria-label="Start" data-testid="ctl-start">⏮</button>
-        <button className="ctl" onClick={() => onTurn(-1)} aria-label="Previous turn" data-testid="ctl-prev-turn">⏪</button>
-        <button className="ctl" onClick={() => onStep(-1)} aria-label="Previous move" data-testid="ctl-prev">◀</button>
-        <button className="ctl ctl-play" onClick={onPlay} aria-label={playing ? 'Pause' : 'Play'} data-testid="ctl-play">{playing ? '❚❚' : '▶'}</button>
-        <button className="ctl" onClick={() => onStep(1)} aria-label="Next move" data-testid="ctl-next">▶</button>
-        <button className="ctl" onClick={() => onTurn(1)} aria-label="Next turn" data-testid="ctl-next-turn">⏩</button>
-        <button className="ctl" onClick={() => onGo(nav[last], false)} aria-label="End" data-testid="ctl-end">⏭</button>
+        <button className="ctl" onClick={() => onGo(0, false)} aria-label="Start" data-testid="ctl-start"><Icon name="skip-back" size={18} /></button>
+        <button className="ctl" onClick={() => onTurn(-1)} aria-label="Previous turn" data-testid="ctl-prev-turn"><Icon name="rewind" size={18} /></button>
+        <button className="ctl" onClick={() => onStep(-1)} aria-label="Previous move" data-testid="ctl-prev"><Icon name="step-back" size={18} /></button>
+        <button className="ctl ctl-play" onClick={onPlay} aria-label={playing ? 'Pause' : 'Play'} data-testid="ctl-play"><Icon name={playing ? 'pause' : 'play'} size={20} /></button>
+        <button className="ctl" onClick={() => onStep(1)} aria-label="Next move" data-testid="ctl-next"><Icon name="step-forward" size={18} /></button>
+        <button className="ctl" onClick={() => onTurn(1)} aria-label="Next turn" data-testid="ctl-next-turn"><Icon name="fast-forward" size={18} /></button>
+        <button className="ctl" onClick={() => onGo(nav[last], false)} aria-label="End" data-testid="ctl-end"><Icon name="skip-forward" size={18} /></button>
         <button className="ctl ctl-speed" onClick={onSpeed} aria-label="Playback speed" data-testid="ctl-speed">{speed}×</button>
       </div>
       <div className="ctl-pos">Turn {turnNo} · step {pos + 1}/{last + 1}</div>
@@ -485,7 +488,7 @@ function Controls({ fi, nav, frames, playing, speed, review, onGo, onStep, onTur
 }
 
 function LabelPill({ label, small }: { label: Label; small?: boolean }) {
-  return <span className={`label-pill lbl-${label} ${small ? 'sm' : ''}`}><b>{LABEL_ICON[label]}</b>{!small && LABEL_TEXT[label]}</span>;
+  return <span className={`label-pill lbl-${label} ${small ? 'sm' : ''}`}><b>{labelMark(label)}</b>{!small && LABEL_TEXT[label]}</span>;
 }
 
 function Coach({ turn, frame, line, review, progress, failed, names, onShowLine, onPlayLine, onExitLine, onOpenReview }: {
@@ -507,7 +510,7 @@ function Coach({ turn, frame, line, review, progress, failed, names, onShowLine,
           {t.actual.join(' ') !== t.best!.san.join(' ') && <><span className="legend played">Played</span><span>{t.actual.join('  ')}</span></>}
         </div>
         <div className="coach-actions">
-          <button className="btn primary small" onClick={onPlayLine} data-testid="play-line">{line.step ? '↻ Replay line' : '▶ Play the line'}</button>
+          <button className="btn primary small" onClick={onPlayLine} data-testid="play-line"><Icon name={line.step ? 'rotate-cw' : 'play'} size={15} /> {line.step ? 'Replay line' : 'Play the line'}</button>
           <button className="btn ghost small" onClick={onExitLine} data-testid="exit-line">Back to game</button>
         </div>
       </div>
@@ -534,7 +537,7 @@ function Coach({ turn, frame, line, review, progress, failed, names, onShowLine,
           Accuracy — {names[0]} <b>{review.players[0].accuracy === null ? '—' : `${Math.round(review.players[0].accuracy)}%`}</b>, {names[1]} <b>{review.players[1].accuracy === null ? '—' : `${Math.round(review.players[1].accuracy)}%`}</b>.
           {review.keyMoments.length > 0 && ` ${review.keyMoments.length} key moment${review.keyMoments.length === 1 ? '' : 's'} to look at.`}
         </p>
-        {onOpenReview && <button className="btn ghost small" onClick={onOpenReview} data-testid="open-review">See the full review ↓</button>}
+        {onOpenReview && <button className="btn ghost small" onClick={onOpenReview} data-testid="open-review">See the full review <Icon name="arrow-down" size={15} /></button>}
       </div>
     );
   }
@@ -548,7 +551,7 @@ function Coach({ turn, frame, line, review, progress, failed, names, onShowLine,
         <span className="coach-who">{names[turn.player]} · turn {tn(turn.turn)}{turn.card ? ` · drew a ${turn.card}` : ''}</span>
       </div>
       <p className="coach-text" data-testid="coach-text">{turn.text}</p>
-      {hasBetterLine(turn) && <button className="btn ghost small" onClick={() => onShowLine(turn)} data-testid="show-line">Show better line ↗</button>}
+      {hasBetterLine(turn) && <button className="btn ghost small" onClick={() => onShowLine(turn)} data-testid="show-line">Show better line <Icon name="arrow-up-right" size={15} /></button>}
     </div>
   );
 }
@@ -580,7 +583,7 @@ function TurnList({ replay, fi, reviewByTurn, onGo }: { replay: Replay; fi: numb
                 {t.played.map((p, k) => <CardFace key={`p${k}`} kind={p} size="xs" />)}
                 {t.card && <CardFace kind={t.card} size="xs" />}
                 {t.toHand.length > 0 && <span className="tl-hand">+{t.toHand.length}</span>}
-                {!!t.burned?.length && <span className="tl-burn" title="Dead Reverse discarded (already used)">⇄✕</span>}
+                {!!t.burned?.length && <span className="tl-burn" title="Dead Reverse discarded (already used)" aria-label="Reverse discarded"><Icon name="reverse" size={13} /><Icon name="x" size={12} /></span>}
               </span>
               <span className="tl-moves">{t.skipped ? 'skipped' : t.played.includes('reverse') && !t.moves.length ? 'Reverse' : t.moves.join(' ')}{t.endedByCheck && t.moves.length && !t.moves[t.moves.length - 1].includes('#') ? '' : ''}</span>
               {r?.label && <LabelPill label={r.label} small />}
@@ -762,7 +765,7 @@ function ShareReplay({ gameId }: { gameId: string }) {
         setDone(true);
         setTimeout(() => setDone(false), 1600);
       }}>
-      {done ? '✓ Link copied' : '🔗 Share'}
+      <Icon name={done ? 'check' : 'link'} size={15} /> {done ? 'Link copied' : 'Share'}
     </button>
   );
 }

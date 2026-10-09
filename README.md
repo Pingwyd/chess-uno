@@ -35,7 +35,7 @@ BASE_URL=http://localhost:4300 npm run screenshots   # plays both modes with Pla
   - Full chess with castling, en passant, promotion, check, checkmate, stalemate, and automatic draws by threefold repetition, the 50-move rule, and insufficient material. Move generation is checked against standard perft positions.
   - The Chess Uno layer: a shared, seeded 52-card deck (19×1, 18×2, 5×3, 6 Skip, 4 Reverse; about 1.67 moves per number card) that reshuffles the discard pile when the draw pile runs out. A number card gives that many moves in a row. **Giving check ends your turn.** **White's first turn is capped at 1 move.** Skip and Reverse are held in your hand (max 2) and played at the start of a turn. Reverse swaps sides, and clocks and hands stay with their players. **Each player gets one Reverse per game.** Checkmate is checked at the end of a turn, and the king can never be captured.
   - A 10-minute clock per player. Running out of time loses, unless your opponent can't possibly mate, in which case it's a draw. There's a 1-second grace period for the card reveal, plus pause.
-  - Extended turn notation such as `[3] e5 Nf6 Nc6`, `[Skip→hand] [2] d5 Nc6`, and `{Reverse}`.
+  - Extended turn notation such as `[3] e5 Nf6 Nc6`, `[Skip->hand] [2] d5 Nc6`, and `{Reverse}`.
 - **Bot** (`src/engine`) that understands multi-move turns. It searches sequences of up to N moves, where any check ends the sequence just like the rule. It then scores the result against the opponent's best 1- or 2-move reply, weighted by deck odds. There are three levels: **Pawn** (easy), **Knight** (medium) and **Rook** (hard). They differ in search width, reply depth and deliberate noise, and they also decide when to play Skip and Reverse. The bot runs in a Web Worker.
 - **UI** (`src/ui`), built with React and Vite:
   - The **Arcane Forge** SVG piece set: ivory and gold "Ember" pieces against obsidian "Tide" pieces with teal and violet glow, each piece a little character. A **Classic** set is also available.
@@ -150,10 +150,16 @@ An alternate renderer of the same game (react-three-fiber + drei + postprocessin
 - **Camera:** orbit (no pan) with polar and zoom limits, plus a reset button. The camera auto-fits the board to the viewport and sits on the bottom player's side. Reverse swings it smoothly round to the other side. Pass & Play uses a near-top-down view, and the face-to-face zones stay as they are.
 - **Performance and fallbacks:**
   - The 3D code is a lazy chunk (~270 KB gzip) loaded only when 3D is chosen. The main 2D bundle stays small (~100 KB gzip, including the learning-path home card).
-  - DPR is capped at 1.75. A `PerformanceMonitor` drops to DPR 1 with no bloom and smaller shadows if the frame rate falls.
+  - Rendering stays sharp: DPR is `min(devicePixelRatio, 2)` and never drops below 1.25 on high-DPI screens (1 elsewhere). In **Auto** graphics mode (Settings → Board → 3D graphics: Auto / High / Low), a `PerformanceMonitor` feeds a governor (`src/ui/three/quality.ts`) that sheds work one step at a time in this order: particles, half-res bloom, bloom off, 1024 shadow map, baked contact shadows instead of real-time shadows, studio reflections off, and only then one modest DPR step. It has hysteresis (a cooldown between steps, a slow climb back, and a climb followed straight away by a drop pins the level), so quality doesn't flip back and forth. **Low** pins every effect off at full resolution.
+  - Antialiasing: the plain renderer uses MSAA; with bloom on, the composer renders a multisampled scene pass (FXAA on GPUs without multisampled targets) at the canvas DPR and applies the same ACES tone mapping, so switching the composer on or off doesn't shift colours. Board labels and badges are drawn on 2x canvases with anisotropic filtering.
+  - `node scripts/dpr-shots.mjs` checks this on a 390x844 @3x phone (`TAG=before|after`, `GRAPHICS=auto|high|low`) and writes the full screen plus a 1:1 crop to `screenshots/3d-dpr-*.png`.
   - Without WebGL the 3D option is disabled and the 2D board is used. If the 3D chunk fails at runtime, it falls back to 2D.
   - `prefers-reduced-motion` turns off particles and makes moves and camera changes instant.
 - **Screenshots:** `node scripts/board3d-shots.mjs` (needs `vite preview` on 4310 and the game server for the online flow; `ONLY=desktop,mobile,pass,classic,online,fallback`). It runs Chrome with SwiftShader WebGL and writes `screenshots/3d-*.png`.
+
+Crispness on a 3x phone (390x844, SwiftShader): before (dropped to DPR 1, no AA), after (Auto, DPR 2 with MSAA through the composer), Low (effects off, still DPR 2):
+
+![](docs/screenshots/3d-dpr-crops.jpg)
 
 | Desktop vs bot | Mid-move | Mobile |
 |---|---|---|
@@ -262,6 +268,115 @@ Every finished game is saved and can be replayed and reviewed — vs bot, Pass &
 |---|---|
 | ![](docs/screenshots/review-recent-home.jpg) | ![](docs/screenshots/review-recent-all.jpg) |
 
+## Settings, profile, friends and live games
+
+**Navigation.** The app has a nav bar with Home, Learn, Social, Leaderboard and Profile, plus ⚙ Settings. It sits at the top on desktop/web widths (≥760px) and becomes a bottom tab bar on phones (`src/ui/nav/AppNav.tsx`). It's hidden during games, lessons, daily puzzles, replays and while spectating. Home stays focused on play modes, Learn and recent games. The piece-set, board, sound and how-to controls moved into Settings, and a "How to play" link stays under the logo. Deep links: `?settings`, `?social` / `?social=live`, `?leaderboard`.
+
+- **Profile** (nav → Profile):
+  - avatar picker (16 symbols, or your initial) and display-name edit;
+  - rating with a **rating-history chart** (rated games, from `GET /api/my/profile`);
+  - W/L/D, win rate, current and best win streak;
+  - a "Badges & skins" shortcut;
+  - recent games (online and local merged), each linking to its review.
+
+  Guests and offline players get the same profile built from games saved on the device (`src/ui/settings/stats.ts`), plus a "create a free account" prompt.
+- **Badges & skins** (the Collection tab next to Profile and Settings; `src/ui/settings/CollectionTab.tsx`):
+  - collection summary (badges and skins owned, current pairing);
+  - piece-skin selector for white and black, showing which badge unlocks each locked skin;
+  - Arcane/Classic set switch;
+  - every badge with its description, earned date and skin reward, filterable by All / Earned / To earn;
+  - a link to the Learn path.
+- **Social** (nav → Social; `src/ui/social/SocialScreen.tsx`): Friends and Live games. They're sub-tabs on phones and two columns on wide screens.
+  - **Friends** (accounts only; guests are asked to sign up):
+    - search players by name;
+    - send, accept, decline or cancel requests, and remove friends;
+    - each friend shows a **live presence** dot: online, in a game or in a rated game;
+    - **Watch** a friend's game, or **Challenge** a friend who is online.
+  - **Live games:** see below.
+- **Leaderboard** (nav → Leaderboard; `src/ui/social/LeaderboardScreen.tsx`):
+  - a podium for the top three, then the top 50;
+  - your own rank card;
+  - an Everyone / ★ Friends filter.
+- **Online lobby:** Quick Match, Play a friend, your recent online games, and links to Friends, Live games and the Leaderboard. It no longer duplicates them.
+- **Settings** (nav → ⚙):
+  - Board: 2D/3D default, piece set, legal-move hints, **confirm moves** (stage a move, then press Play ✓).
+  - Sound: master sound, effects volume, generative ambient music (default off), vibration.
+  - Notifications: placeholder toggles, marked PREVIEW (push is in `BACKLOG.md`).
+  - Reduced motion: system, on or off. It turns off board spins, card flips, piece slides and sparks.
+  - Account: sign in or out, change password, delete account (needs your password and typing DELETE).
+  - About and how to play.
+
+  Device settings live in `localStorage` (`cu.settings`, `src/ui/settings/store.ts`).
+
+**Server** (`server/src/social.ts`, `hub.ts`, `http.ts`; migration `004_social`): adds `users.avatar`, `users.deleted` and a `friendships` table (one row per pair, `pending`/`accepted`).
+
+- **REST:**
+
+  | Method | Path | Notes |
+  |---|---|---|
+  | GET | `/api/users/search?q=` | |
+  | GET | `/api/friends` | Includes presence |
+  | POST | `/api/friends/{request,accept,decline,cancel,remove}` | `{userId}` |
+  | GET | `/api/users/:id/profile`, `/api/my/profile` | |
+  | POST | `/api/profile` | Name and avatar |
+  | POST | `/api/account/password` | |
+  | POST | `/api/account/delete` | |
+  | GET | `/api/leaderboard?scope=friends` | |
+  | GET | `/api/live` | |
+
+  A request to someone who already asked you is accepted automatically. The cap is 200 friends.
+- **WebSocket:**
+  - `presence` updates go to your friends.
+  - `social` events cover requests, accepts, declines, cancels and removals, and show up as in-app notices.
+  - Challenges: `challenge` → `challengeUpdate`.
+  - `live` subscribes to the live-games list. Pushes are throttled to once a second.
+  - With a saved login, the app keeps a background socket open on any screen, so friends see you online and challenges reach you everywhere.
+- **Challenges:**
+  - friends only;
+  - the target must be online and not already in a game;
+  - one outstanding challenge per player.
+
+  A challenge creates a private, unrated room with the friend as the invitee. Challenges stay open for **5 minutes** (`CHALLENGE_TTL_MS` in `src/net/protocol.ts`; the server's `CHALLENGE_TTL_MS` env var overrides it). The friend gets an Accept/Decline card with an m:ss countdown, and the challenger sees the same countdown in the waiting room. Accepting seats them and starts the game. A decline, timeout or the challenger leaving closes the room.
+- **Live games** (Social page):
+  - games in progress, highest average rating first;
+  - friends' games highlighted;
+  - filters: All / Rated / Casual / Friends;
+  - spectator counts, updated live.
+
+  Tapping a game spectates it; rated games keep the one-turn spectator delay. Quick Match games are public. Private rooms (invites and challenges) are listed only for the players and their friends.
+- **Delete account** anonymises the user rather than removing the row: name "Deleted player", email and password cleared, sessions rejected. Friendships and learning progress are deleted. Opponents' game histories and replays stay intact, and the email can be used again. It's blocked while you're in a game.
+- **Tests:**
+  - `server/test/social.test.ts`:
+    - friend lifecycle, search, guest rules, friends leaderboard;
+    - presence and social pushes;
+    - challenge accept/decline/cancel/offline/busy, the 5-minute TTL and expiry;
+    - live list ordering, privacy, spectators and the delayed ranked view;
+    - profile, rating history, streaks, password change, account deletion.
+  - `tests/social.test.ts`: local stats, avatars, settings store, challenge countdown.
+- **Screenshots:** `npx tsx scripts/social-shots.ts`. It starts an in-memory server on 8798 and a preview on 4320, seeds eight accounts with friendships, rated history and live bot-driven games, and writes `screenshots/social-*.png`.
+
+| Home (mobile) | Leaderboard | Social: friends | Social: live games | Badges & skins |
+|---|---|---|---|---|
+| ![](docs/screenshots/social-home.jpg) | ![](docs/screenshots/social-leaderboard.jpg) | ![](docs/screenshots/social-friends.jpg) | ![](docs/screenshots/social-live.jpg) | ![](docs/screenshots/social-collection.jpg) |
+
+| Profile + rating chart | Settings | Friend request | Challenge | Challenge sent | Spectating |
+|---|---|---|---|---|---|
+| ![](docs/screenshots/social-profile.jpg) | ![](docs/screenshots/social-settings.jpg) | ![](docs/screenshots/social-friend-request.jpg) | ![](docs/screenshots/social-challenge.jpg) | ![](docs/screenshots/social-challenge-sent.jpg) | ![](docs/screenshots/social-spectate.jpg) |
+
+| In-game chat (Lucide emotes) |
+|---|
+| ![](docs/screenshots/social-chat.jpg) |
+
+| Home (desktop) | Social (desktop) | Leaderboard (desktop) |
+|---|---|---|
+| ![](docs/screenshots/social-home-desktop.jpg) | ![](docs/screenshots/social-social-desktop.jpg) | ![](docs/screenshots/social-leaderboard-desktop.jpg) |
+
+## UI guidelines
+
+- **Icons: Lucide only, no emoji.** Every UI icon is a [Lucide](https://lucide.dev) icon from `lucide-react`, used through `src/ui/icons.tsx` (`<Icon name="..." />`, named per-icon imports so only the used icons ship). Use the default 18px size and a 2px stroke unless the layout needs otherwise. Icons are `aria-hidden`; give icon-only buttons an `aria-label`, or pass `label` to `Icon` when the icon carries meaning by itself. Data (badges, lessons, avatars, notices) stores icon names, not glyphs.
+- No emoji or unicode symbol glyphs (arrows, stars, check marks, chess symbols and so on) in UI text. `tests/icons.test.ts` scans `src` for them. Real chess annotations (`!!`, `!`, `?!`, `?`, `??`, `+`, `#`) are fine, and so is the chess piece art (SVG and 3D).
+- Chat quick emotes are Lucide icons plus a short label, or styled text ("GG").
+
 ## Rule decisions made for the MVP
 
 These follow `docs/DESIGN.md`. Where the doc left a gap, this is what the code does:
@@ -279,9 +394,9 @@ These follow `docs/DESIGN.md`. Where the doc left a gap, this is what the code d
 11. Draw by agreement exists in the engine but has no button in this MVP.
 12. **Rules v2** (after playtesting found the cards too swingy):
     - **Fewer 3s:** the deck is now 19×1, 18×2, 5×3, 6 Skip, 4 Reverse (was 18×1, 15×2, 9×3). A number card averages 70/42 ≈ **1.67 moves** (was 1.79), and P(3) per number card drops from 21% to 12%.
-    - **One Reverse per player per game.** After you play yours, any other Reverse in your hand is discarded, and any Reverse you draw later is discarded and you draw again (`[Reverse✕]` in the notation). It never takes a hand slot. The shared reducer rejects a second Reverse, so the online server enforces it too. Your hand shows a greyed "USED" Reverse with a tooltip.
+    - **One Reverse per player per game.** After you play yours, any other Reverse in your hand is discarded, and any Reverse you draw later is discarded and you draw again (`[Reverse-burned]` in the notation). It never takes a hand slot. The shared reducer rejects a second Reverse, so the online server enforces it too. Your hand shows a greyed "USED" Reverse with a tooltip.
     - **Versioned:** `GameConfig.rules` (`src/rules/cards.ts`: `RULES_VERSION = 2`). Saved and online games recorded before v2 have no `rules` field and replay with the v1 deck and no Reverse limit, so old replays stay exact. The bot and review engine use the v2 card odds; the review is cached by `REVIEW_VERSION`, now 3.
 
 ## Not in the MVP yet
 
-A leaderboard screen beyond the lobby top 10, seasons, friends lists, rematch offers, draw offers, "try it yourself" from a review position, server-enforced ranked unlock, monetization, and bot levels 4–5 (Bishop and Queen). Online play is groundwork: it hasn't been deployed or load-tested. See the roadmap in `docs/DESIGN.md` §13.
+A leaderboard screen beyond the lobby top 10, seasons, rematch offers, draw offers, "try it yourself" from a review position, server-enforced ranked unlock, monetization, and bot levels 4–5 (Bishop and Queen). Online play is groundwork: it hasn't been deployed or load-tested. See `BACKLOG.md` and the roadmap in `docs/DESIGN.md` §13.

@@ -311,7 +311,7 @@ export function reviewGame(record: GameRecord, onProgress?: Progress, replay = r
       const gainPct = winChance(-v) - winChance(beforeMover);
       const label = classify({ loss: Math.max(0, loss), gain: Math.max(-loss, gainPct > 0 && loss < 0 ? gainPct : 0) });
       const flags: Flag[] = loss > THRESHOLDS.good
-        ? [{ type: 'reverseBad', text: `Reverse here gave away a ${v > 150 ? 'winning' : 'better'} position (${pawns(v)} → ${pawns(-v)}).` }]
+        ? [{ type: 'reverseBad', text: `Reverse here gave away a ${v > 150 ? 'winning' : 'better'} position (from ${pawns(v)} to ${pawns(-v)}).` }]
         : v < -100 ? [{ type: 'reverseGood', text: `Well-timed Reverse: your side was worse (${pawns(v)}), so swapping took over the stronger side (${pawns(-v)}).` }] : [];
       const after = -v;
       lastAfter = { player, score: after };
