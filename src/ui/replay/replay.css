@@ -191,3 +191,15 @@
 @media (prefers-reduced-motion: reduce) {
   .event-chip, .coach, .luck-needle { animation: none; transition: none; }
 }
+
+/* Me / Opponent / Both filter + mistake walker */
+.review-filter { display: flex; flex-direction: column; gap: 8px; padding: 10px 0 2px; border-top: 1px solid var(--line); }
+.rf-seg { width: 100%; }
+.rf-seg .seg-btn { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rf-walk { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; }
+.rf-btn { gap: 4px; padding-left: 10px; padding-right: 10px; }
+.rf-btn:disabled { opacity: 0.35; }
+.rf-count { text-align: center; font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); font-variant-numeric: tabular-nums; }
+.mq-head i.off, .mq-n b.off { opacity: 0.3; }
+.moments-none { margin: 0; color: var(--muted); font-size: 13px; }
+.coach-hidden { gap: 2px; }

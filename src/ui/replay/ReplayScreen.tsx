@@ -17,6 +17,10 @@ import { Piece, type PieceSet } from '../pieces';
 import { formatClock } from '../PlayerZone';
 import './replay.css';
 import { Icon } from '../icons';
+import { keyMomentsFor, loadSide, mistakes, saveSide, shows, stepMistake, viewerSeat, type ReviewSide } from '../../replay/reviewFilter';
+
+/** Is this player's verdict shown under the current Me / Opponent / Both filter? */
+type Shown = (p: PlayerId) => boolean;
 
 export type ReplaySource = { id: string } | { gameId: string };
 
@@ -104,6 +108,12 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
   const [line, setLine] = useState<LineView | null>(null);
   const animKey = useRef(1);
   const { review, progress, failed } = useReview(record);
+  // Me / Opponent / Both: whose verdicts, moments and better lines show. Accuracy always shows for both.
+  const viewer = viewerSeat(record);
+  const [side, setSideRaw] = useState<ReviewSide>(() => loadSide(viewer));
+  const setSide = (s: ReviewSide) => { setSideRaw(s); saveSide(viewer, s); };
+  const shown: Shown = useCallback((p: PlayerId) => shows(side, viewer, p), [side, viewer]);
+  const sideMistakes = useMemo(() => (review ? mistakes(review, side, viewer) : []), [review, side, viewer]);
 
   const frame = frames[fi];
   const bottom: PlayerId = record.mode === 'online' ? (record.online?.you ?? 0) : 0;
@@ -230,9 +240,38 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
     />
   );
 
+  const names = record.config.players.map((p) => p.name) as [string, string];
+  const sideNames: Record<ReviewSide, string> = viewer === null
+    ? { me: names[0], opp: names[1], both: 'Both' }
+    : { me: 'Me', opp: 'Opponent', both: 'Both' };
+  const jump = (dir: 1 | -1) => { const t = stepMistake(sideMistakes, fi, dir); if (t) { setPlaying(false); go(t.frameEnd, false); } };
+  const atMistake = sideMistakes.findIndex((t) => t.frameEnd === fi);
+  const filterBar = review && (
+    <div className="review-filter" data-testid="review-filter">
+      <div className="seg seg-small rf-seg" role="radiogroup" aria-label="Show verdicts for">
+        {(['me', 'opp', 'both'] as ReviewSide[]).map((k) => (
+          <button key={k} role="radio" aria-checked={side === k} className={`seg-btn ${side === k ? 'on' : ''}`} onClick={() => setSide(k)} data-testid={`side-${k}`}>
+            {sideNames[k]}
+          </button>
+        ))}
+      </div>
+      <div className="rf-walk">
+        <button className="btn small rf-btn" onClick={() => jump(-1)} disabled={!stepMistake(sideMistakes, fi, -1)} data-testid="prev-mistake" aria-label="Previous mistake">
+          <Icon name="chevron-left" size={16} /><span>Previous</span>
+        </button>
+        <span className="rf-count" data-testid="mistake-count">
+          {sideMistakes.length === 0 ? 'No mistakes' : atMistake >= 0 ? `Mistake ${atMistake + 1} of ${sideMistakes.length}` : `${sideMistakes.length} mistake${sideMistakes.length === 1 ? '' : 's'}`}
+        </span>
+        <button className="btn small rf-btn" onClick={() => jump(1)} disabled={!stepMistake(sideMistakes, fi, 1)} data-testid="next-mistake" aria-label="Next mistake">
+          <span>Next</span><Icon name="chevron-right" size={16} />
+        </button>
+      </div>
+    </div>
+  );
+
   const controls = (
     <Controls
-      fi={fi} nav={nav} frames={frames} playing={playing} speed={speed} review={review}
+      fi={fi} nav={nav} frames={frames} playing={playing} speed={speed} review={review} shown={shown}
       onGo={go} onStep={step} onTurn={stepTurn} onPlay={() => { if (fi >= nav[nav.length - 1]) go(0, false); setPlaying((p) => !p); }}
       onSpeed={() => setSpeed((s) => SPEEDS[(SPEEDS.indexOf(s) + 1) % SPEEDS.length])}
     />
@@ -241,7 +280,7 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
   const coach = (
     <Coach
       turn={curTurn} frame={frame} line={line} review={review} progress={progress} failed={failed}
-      names={record.config.players.map((p) => p.name) as [string, string]}
+      names={names} shown={shown} keyCount={review ? keyMomentsFor(review, side, viewer).length : 0}
       onShowLine={showLine} onPlayLine={() => line && setLine({ ...line, step: 0, playing: true })} onExitLine={() => { setLine(null); setAnim(null); }}
       onOpenReview={wide && tab === 'review' ? undefined : () => { setTab('review'); requestAnimationFrame(() => scrollToTabs()); }}
     />
@@ -256,9 +295,10 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
     </div>
   );
 
-  const side = tab === 'replay'
-    ? <TurnList replay={replay} fi={fi} reviewByTurn={reviewByTurn} onGo={(i) => go(i, false)} />
-    : <ReviewPanel record={record} review={review} progress={progress} failed={failed} fi={fi} frames={frames} onGo={(i) => go(i, false)} onShowLine={showLine} />;
+  const sidePanel = tab === 'replay'
+    ? <TurnList replay={replay} fi={fi} reviewByTurn={reviewByTurn} shown={shown} onGo={(i) => go(i, false)} />
+    : <ReviewPanel record={record} review={review} progress={progress} failed={failed} fi={fi} frames={frames} shown={shown}
+        keyMoments={review ? keyMomentsFor(review, side, viewer) : []} onGo={(i) => go(i, false)} onShowLine={showLine} />;
 
   const turnNo = useCallback((i: number) => replay.final.history[i]?.turn || i + 1, [replay]);
   if (wide) {
@@ -276,7 +316,8 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
             {coach}
             {controls}
             {tabs}
-            <div className="replay-side-scroll">{side}</div>
+            {filterBar}
+            <div className="replay-side-scroll">{sidePanel}</div>
           </aside>
         </div>
       </div>
@@ -294,7 +335,8 @@ function Viewer({ record, replay, pieceSet, boardMode, onToggleBoard, onBoardUna
         {coach}
         {controls}
         {tabs}
-        {side}
+        {filterBar}
+        {sidePanel}
       </div>
     </div>
     </TurnNo.Provider>
@@ -450,8 +492,8 @@ function EventChip({ frame, names }: { frame: Frame; names: [string, string] }) 
   return <div className={`event-chip chip-${t.tone}`} key={frame.at + t.text} data-testid="event-chip">{t.text}</div>;
 }
 
-function Controls({ fi, nav, frames, playing, speed, review, onGo, onStep, onTurn, onPlay, onSpeed }: {
-  fi: number; nav: number[]; frames: Frame[]; playing: boolean; speed: number; review: GameReview | null;
+function Controls({ fi, nav, frames, playing, speed, review, shown, onGo, onStep, onTurn, onPlay, onSpeed }: {
+  fi: number; nav: number[]; frames: Frame[]; playing: boolean; speed: number; review: GameReview | null; shown: Shown;
   onGo: (i: number, animate?: boolean) => void; onStep: (d: 1 | -1) => void; onTurn: (d: 1 | -1) => void; onPlay: () => void; onSpeed: () => void;
 }) {
   const pos = nav.indexOf(fi);
@@ -459,7 +501,7 @@ function Controls({ fi, nav, frames, playing, speed, review, onGo, onStep, onTur
   const f = frames[fi];
   const tn = useContext(TurnNo);
   const turnNo = tn(f.turn);
-  const markers = review?.turns.filter((t) => t.label && ['blunder', 'mistake', 'brilliant', 'great'].includes(t.label)) ?? [];
+  const markers = review?.turns.filter((t) => t.label && shown(t.player) && ['blunder', 'mistake', 'brilliant', 'great'].includes(t.label)) ?? [];
   return (
     <div className="replay-controls" data-testid="replay-controls">
       <div className="scrub">
@@ -491,8 +533,9 @@ function LabelPill({ label, small }: { label: Label; small?: boolean }) {
   return <span className={`label-pill lbl-${label} ${small ? 'sm' : ''}`}><b>{labelMark(label)}</b>{!small && LABEL_TEXT[label]}</span>;
 }
 
-function Coach({ turn, frame, line, review, progress, failed, names, onShowLine, onPlayLine, onExitLine, onOpenReview }: {
+function Coach({ turn, frame, line, review, progress, failed, names, shown, keyCount, onShowLine, onPlayLine, onExitLine, onOpenReview }: {
   turn: TurnReview | null; frame: Frame; line: LineView | null; review: GameReview | null; progress: number | null; failed: boolean; names: [string, string];
+  shown: Shown; keyCount: number;
   onShowLine: (t: TurnReview) => void; onPlayLine: () => void; onExitLine: () => void; onOpenReview?: () => void;
 }) {
   const tn = useContext(TurnNo);
@@ -535,14 +578,22 @@ function Coach({ turn, frame, line, review, progress, failed, names, onShowLine,
         <div className="coach-head"><b>{r ? resultLine(r, names) : 'Game over'}</b></div>
         <p className="coach-text">
           Accuracy: {names[0]} <b>{review.players[0].accuracy === null ? '—' : `${Math.round(review.players[0].accuracy)}%`}</b>, {names[1]} <b>{review.players[1].accuracy === null ? '—' : `${Math.round(review.players[1].accuracy)}%`}</b>.
-          {review.keyMoments.length > 0 && ` ${review.keyMoments.length} key moment${review.keyMoments.length === 1 ? '' : 's'} to look at.`}
+          {keyCount > 0 && ` ${keyCount} key moment${keyCount === 1 ? '' : 's'} to look at.`}
         </p>
         {onOpenReview && <button className="btn ghost small" onClick={onOpenReview} data-testid="open-review">See the full review <Icon name="arrow-down" size={15} /></button>}
       </div>
     );
   }
   if (!turn || !turn.label || frame.kind === 'start') {
-    return <div className="coach coach-idle"><span>Step through the game — each turn gets a verdict from the review bot.</span></div>;
+    return <div className="coach coach-idle"><span>Step through the game. Each turn gets a verdict from the review bot.</span></div>;
+  }
+  if (!shown(turn.player)) {
+    return (
+      <div className="coach coach-idle coach-hidden" data-testid="coach-hidden">
+        <span className="coach-who">{names[turn.player]} · turn {tn(turn.turn)}</span>
+        <span>Verdict hidden by the filter. Choose Both to see it.</span>
+      </div>
+    );
   }
   return (
     <div className={`coach coach-${turn.label}`} data-testid="coach">
@@ -556,7 +607,7 @@ function Coach({ turn, frame, line, review, progress, failed, names, onShowLine,
   );
 }
 
-function TurnList({ replay, fi, reviewByTurn, onGo }: { replay: Replay; fi: number; reviewByTurn: Map<number, TurnReview>; onGo: (i: number) => void }) {
+function TurnList({ replay, fi, reviewByTurn, shown, onGo }: { replay: Replay; fi: number; reviewByTurn: Map<number, TurnReview>; shown: Shown; onGo: (i: number) => void }) {
   const ref = useRef<HTMLOListElement>(null);
   const cur = replay.frames[fi].turn;
   useEffect(() => {
@@ -586,7 +637,7 @@ function TurnList({ replay, fi, reviewByTurn, onGo }: { replay: Replay; fi: numb
                 {!!t.burned?.length && <span className="tl-burn" title="Dead Reverse discarded (already used)" aria-label="Reverse discarded"><Icon name="reverse" size={13} /><Icon name="x" size={12} /></span>}
               </span>
               <span className="tl-moves">{t.skipped ? 'skipped' : t.played.includes('reverse') && !t.moves.length ? 'Reverse' : t.moves.join(' ')}{t.endedByCheck && t.moves.length && !t.moves[t.moves.length - 1].includes('#') ? '' : ''}</span>
-              {r?.label && <LabelPill label={r.label} small />}
+              {r?.label && shown(r.player) && <LabelPill label={r.label} small />}
             </button>
           </li>
         );
@@ -597,8 +648,8 @@ function TurnList({ replay, fi, reviewByTurn, onGo }: { replay: Replay; fi: numb
 
 // ---------------------------------------------------------------- review summary
 
-function ReviewPanel({ record, review, progress, failed, fi, frames, onGo, onShowLine }: {
-  record: GameRecord; review: GameReview | null; progress: number | null; failed: boolean; fi: number; frames: Frame[];
+function ReviewPanel({ record, review, progress, failed, fi, frames, shown, keyMoments, onGo, onShowLine }: {
+  record: GameRecord; review: GameReview | null; progress: number | null; failed: boolean; fi: number; frames: Frame[]; shown: Shown; keyMoments: number[];
   onGo: (i: number) => void; onShowLine: (t: TurnReview) => void;
 }) {
   const names = record.config.players.map((p) => p.name) as [string, string];
@@ -608,7 +659,7 @@ function ReviewPanel({ record, review, progress, failed, fi, frames, onGo, onSho
         {failed ? <p>The review bot couldn't analyse this game.</p> : (
           <>
             <div className="review-spinner" />
-            <p>Analysing {frames[frames.length - 1].state.history.length} turns{progress !== null ? ` — ${Math.round(progress * 100)}%` : ''}</p>
+            <p>Analysing {frames[frames.length - 1].state.history.length} turns{progress !== null ? ` · ${Math.round(progress * 100)}%` : ''}</p>
             <small>Runs on this device, works offline.</small>
           </>
         )}
@@ -620,10 +671,10 @@ function ReviewPanel({ record, review, progress, failed, fi, frames, onGo, onSho
       <div className="acc-row">
         {([0, 1] as PlayerId[]).map((p) => <AccuracyCard key={p} name={names[p]} p={p} review={review} />)}
       </div>
-      <EvalGraph review={review} names={names} fi={fi} frames={frames} onGo={onGo} />
+      <EvalGraph review={review} names={names} fi={fi} frames={frames} shown={shown} onGo={onGo} />
       <LuckMeter review={review} names={names} />
-      <KeyMoments review={review} names={names} onGo={onGo} onShowLine={onShowLine} />
-      <LabelTable review={review} names={names} />
+      <KeyMoments review={review} moments={keyMoments} names={names} onGo={onGo} onShowLine={onShowLine} />
+      <LabelTable review={review} names={names} shown={shown} />
       <p className="review-foot">Review bot: deeper search than the hardest bot, judged for the exact card drawn each turn. Analysed in {(review.ms / 1000).toFixed(1)} s.</p>
     </div>
   );
@@ -644,7 +695,7 @@ function AccuracyCard({ name, p, review }: { name: string; p: PlayerId; review: 
   );
 }
 
-function EvalGraph({ review, names, fi, frames, onGo }: { review: GameReview; names: [string, string]; fi: number; frames: Frame[]; onGo: (i: number) => void }) {
+function EvalGraph({ review, names, fi, frames, shown, onGo }: { review: GameReview; names: [string, string]; fi: number; frames: Frame[]; shown: Shown; onGo: (i: number) => void }) {
   const tn = useContext(TurnNo);
   const pts = review.graph;
   const W = 320, H = 120, n = Math.max(1, pts.length - 1);
@@ -654,7 +705,7 @@ function EvalGraph({ review, names, fi, frames, onGo }: { review: GameReview; na
   const area = `${path} L${W} ${H / 2} L0 ${H / 2} Z`;
   const curTurn = frames[fi].turn;
   const curIdx = Math.max(0, pts.findIndex((p, i) => i > 0 && p.turn >= curTurn));
-  const marks = review.turns.map((t, i) => ({ t, i: i + 1 })).filter(({ t }) => t.label && ['blunder', 'mistake', 'brilliant', 'great', 'inaccuracy'].includes(t.label));
+  const marks = review.turns.map((t, i) => ({ t, i: i + 1 })).filter(({ t }) => t.label && shown(t.player) && ['blunder', 'mistake', 'brilliant', 'great', 'inaccuracy'].includes(t.label));
   return (
     <div className="eval-card" data-testid="eval-graph">
       <div className="eval-head"><b>Evaluation</b><span><i className="sw sw0" />{names[0]} <i className="sw sw1" />{names[1]}</span></div>
@@ -672,7 +723,7 @@ function EvalGraph({ review, names, fi, frames, onGo }: { review: GameReview; na
       <div className="eval-marks">
         {marks.map(({ t, i }) => (
           <button key={t.turn} className={`eval-mark mark-${t.label}`} style={{ left: `${(i / n) * 100}%`, top: `${(y(t.evalAfter) / H) * 100}%` }}
-            onClick={() => onGo(t.frameEnd)} title={`${LABEL_TEXT[t.label!]} — ${names[t.player]}, turn ${tn(t.turn)}`} aria-label={`${LABEL_TEXT[t.label!]} turn ${tn(t.turn)}`} />
+            onClick={() => onGo(t.frameEnd)} title={`${LABEL_TEXT[t.label!]}: ${names[t.player]}, turn ${tn(t.turn)}`} aria-label={`${LABEL_TEXT[t.label!]} turn ${tn(t.turn)}`} />
         ))}
       </div>
       <div className="eval-axis"><span>{names[0]} winning</span><span>{names[1]} winning</span></div>
@@ -707,13 +758,17 @@ function LuckMeter({ review, names }: { review: GameReview; names: [string, stri
   );
 }
 
-function KeyMoments({ review, names, onGo, onShowLine }: { review: GameReview; names: [string, string]; onGo: (i: number) => void; onShowLine: (t: TurnReview) => void }) {
+function KeyMoments({ review, moments, names, onGo, onShowLine }: { review: GameReview; moments: number[]; names: [string, string]; onGo: (i: number) => void; onShowLine: (t: TurnReview) => void }) {
   const tn = useContext(TurnNo);
-  if (!review.keyMoments.length) return null;
+  if (!moments.length) {
+    return review.keyMoments.length ? (
+      <div className="moments" data-testid="key-moments"><div className="eval-head"><b>Key moments</b></div><p className="moments-none">None for this side.</p></div>
+    ) : null;
+  }
   return (
     <div className="moments" data-testid="key-moments">
       <div className="eval-head"><b>Key moments</b></div>
-      {review.keyMoments.map((k) => {
+      {moments.map((k) => {
         const t = review.turns[k];
         return (
           <div key={k} className={`moment mom-${t.label}`}>
@@ -735,11 +790,11 @@ function KeyMoments({ review, names, onGo, onShowLine }: { review: GameReview; n
 }
 
 /** Move-quality grid: one tile per verdict, the glyph in its colour, both players' counts side by side. */
-function LabelTable({ review, names }: { review: GameReview; names: [string, string] }) {
+function LabelTable({ review, names, shown }: { review: GameReview; names: [string, string]; shown: Shown }) {
   const rows: Label[] = ['brilliant', 'great', 'best', 'good', 'inaccuracy', 'mistake', 'blunder'];
   return (
     <div className="mq" data-testid="label-table">
-      <div className="mq-head"><b>Move quality</b><span><i>{names[0]}</i><i>{names[1]}</i></span></div>
+      <div className="mq-head"><b>Move quality</b><span><i className={shown(0) ? '' : 'off'}>{names[0]}</i><i className={shown(1) ? '' : 'off'}>{names[1]}</i></span></div>
       <div className="mq-grid">
         {rows.map((l) => {
           const a = review.players[0].counts[l], b = review.players[1].counts[l];
@@ -747,7 +802,7 @@ function LabelTable({ review, names }: { review: GameReview; names: [string, str
             <div key={l} className={`mq-tile lbl-${l} ${a + b ? '' : 'none'}`}>
               <span className="mq-glyph">{labelMark(l)}</span>
               <span className="mq-name">{LABEL_TEXT[l]}</span>
-              <span className="mq-n"><b>{a}</b><b>{b}</b></span>
+              <span className="mq-n"><b className={shown(0) ? '' : 'off'}>{a}</b><b className={shown(1) ? '' : 'off'}>{b}</b></span>
             </div>
           );
         })}
