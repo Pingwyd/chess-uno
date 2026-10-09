@@ -385,7 +385,7 @@ describe('time controls', () => {
     const a = await TestClient.guest(s.base, s.port);
     const b = await TestClient.guest(s.base, s.port);
     a.send({ t: 'createRoom', tc: 'bullet' });
-    const created = await a.waitFor<{ t: 'roomCreated'; code: string; tc: string }>((m) => m.t === 'roomCreated');
+    const created = await a.waitFor<{ t: 'roomCreated'; code: string; tc?: 'bullet' | 'blitz' | 'rapid' }>((m) => m.t === 'roomCreated');
     expect(created.tc).toBe('bullet');
     b.send({ t: 'joinRoom', code: created.code });
     expect((await b.waitSnap(() => true)).state.config.clockMs).toBe(3 * 60_000);
