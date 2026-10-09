@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { type Color, type Move, colorOfPiece, fileOf, inCheck, kingSquare, rankOf, squareName } from '../rules/chess';
-import { currentColor, currentLegalMoves, type GameState } from '../rules/game';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useBoardInteraction } from './useBoardInteraction';
+import { type Color, colorOfPiece, fileOf, rankOf, squareName } from '../rules/chess';
+import type { GameState } from '../rules/game';
 import { Piece, type PieceSet } from './pieces';
 
 export interface LastMoveAnim {
@@ -9,7 +10,7 @@ export interface LastMoveAnim {
   to: number;
 }
 
-interface Props {
+export interface BoardProps {
   state: GameState;
   bottomColor: Color;
   /** Pass & Play: pieces of the top player face them (rotated 180°). */
@@ -22,8 +23,7 @@ interface Props {
   onPromotion: (from: number, to: number) => void;
 }
 
-export function Board({ state, bottomColor, faceTopPieces, topColor, interactive, pieceSet, anim, onMove, onPromotion }: Props) {
-  const [selected, setSelected] = useState<number | null>(null);
+export function Board({ state, bottomColor, faceTopPieces, topColor, interactive, pieceSet, anim, onMove, onPromotion }: BoardProps) {
   // Cumulative rotation so the board always spins the same way on Reverse.
   const [angle, setAngle] = useState(bottomColor === 'w' ? 0 : 180);
   const prevBottom = useRef(bottomColor);
@@ -34,39 +34,7 @@ export function Board({ state, bottomColor, faceTopPieces, topColor, interactive
     }
   }, [bottomColor]);
 
-  const legal = useMemo(() => (interactive ? currentLegalMoves(state) : []), [state, interactive]);
-  const mover = currentColor(state);
-  useEffect(() => setSelected(null), [state.movesMade, state.turnNumber, state.phase]);
-
-  const targets = useMemo(() => {
-    const map = new Map<number, Move[]>();
-    if (selected === null) return map;
-    for (const m of legal) if (m.from === selected) map.set(m.to, [...(map.get(m.to) ?? []), m]);
-    return map;
-  }, [legal, selected]);
-
-  const shownMoves = state.turnMoves.length ? state.turnMoves : state.lastTurnMoves;
-  const moveBadge = new Map<number, number>();
-  const fromSquares = new Set<number>();
-  shownMoves.forEach((m, i) => { moveBadge.set(m.to, i + 1); fromSquares.add(m.from); });
-  const badgeColor = shownMoves[0] ? colorOfPiece(shownMoves[0].piece) : 'w';
-
-  const checked = new Set<number>();
-  for (const c of ['w', 'b'] as Color[]) if (inCheck(state.pos, c)) checked.add(kingSquare(state.pos.board, c));
-
-  const click = (sq: number) => {
-    if (!interactive) return;
-    const piece = state.pos.board[sq];
-    if (selected !== null && targets.has(sq)) {
-      const ms = targets.get(sq)!;
-      if (ms.some((m) => m.promotion)) onPromotion(selected, sq);
-      else onMove(selected, sq);
-      setSelected(null);
-      return;
-    }
-    if (piece && colorOfPiece(piece) === mover && legal.some((m) => m.from === sq)) setSelected(sq === selected ? null : sq);
-    else setSelected(null);
-  };
+  const { selected, targets, mover, moveBadge, fromSquares, badgeColor, checked, click } = useBoardInteraction(state, interactive, onMove, onPromotion);
 
   const squares = [];
   for (let row = 0; row < 8; row++) {

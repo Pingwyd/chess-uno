@@ -52,18 +52,20 @@ src/
   engine/     evaluate.ts, bot.ts (turn search), bot.worker.ts, botClient.ts
   net/        transport.ts (GameTransport seam + LocalTransport), protocol.ts (wire types shared with
               the server), online.ts (OnlineClient + OnlineTransport)
-  ui/         React screens/components, pieces/ (SVG sets), styles.css
+  ui/         React screens/components, pieces/ (SVG sets), styles.css,
+              useBoardInteraction.ts (selection/targets shared by 2D and 3D), BoardView.tsx (2D/3D switch),
+              three/ (lazy 3D board: Board3D.tsx, pieceGeometry.ts, materials.ts, mapping.ts)
 server/       Node game server (npm workspace): src/{index,app,hub,room,redact,auth,http,db,rating,config}.ts
               and test/ (two simulated clients over real sockets)
-tests/        Vitest: chess.test.ts (perft etc.), game.test.ts (card rules), bot.test.ts
+tests/        Vitest: chess.test.ts (perft etc.), game.test.ts (card rules), bot.test.ts, board3d.test.ts
 docs/         DESIGN.md, screenshots/
-scripts/      screenshots.mjs, reverse-shot.mjs, online-e2e.mjs (Playwright), preview-pieces.tsx
+scripts/      screenshots.mjs, reverse-shot.mjs, online-e2e.mjs, board3d-shots.mjs (Playwright), preview-pieces.tsx
 ```
 
 ### Built to grow
 
 - **Online multiplayer:** the rules are a pure, deterministic reducer, `applyAction(state, action, now)`, with a seeded RNG stored in the state, so the same code can run on the authoritative server. Every action carries the acting `player`. The UI only talks to a `GameTransport`, so a WebSocket transport can replace `LocalTransport` without touching the screens.
-- **3D (Three.js):** the board is a view over `GameState`. A react-three-fiber board can sit beside `Board.tsx`, and the piece set is already a swappable module.
+- **3D (Three.js):** shipped — see [3D board](#3d-board). It is a second renderer over the same `GameState` and the same interaction hook as `Board.tsx`.
 - **Android (Capacitor):** the build uses a relative `base`, is fully offline (bundled fonts, synthesized audio, no CDNs), and is built for touch with portrait-first layouts. Run `npx cap init` and `npx cap add android` on top of `dist/`.
 - **Stronger bots:** `botStep(state, level)` is the only bot interface, so the planned Rust→WASM engine can slot in behind it.
 
@@ -125,6 +127,32 @@ The client is static and can stay on GitHub Pages (or any static host); build it
 - **Fly.io:** `fly launch` with a small Node Dockerfile (copy the repo, `npm ci`, `CMD npm run start -w server`), `internal_port = 8787`, `fly postgres create` + `fly postgres attach` (sets `DATABASE_URL`), `fly secrets set JWT_SECRET=…`. Keep `min_machines_running = 1` so games aren't cut off by auto-stop.
 - **Railway:** a new service from the repo with start command `npm run start -w server`, plus the Postgres plugin (reference its `DATABASE_URL`). Set `JWT_SECRET` and `CORS_ORIGIN`. Railway provides `PORT`.
 - **Postgres:** migrations run automatically on boot. If you prefer SQLite on a single VM, mount a persistent volume for `server/data/`.
+
+## 3D board
+
+An alternate renderer of the same game (react-three-fiber + drei + postprocessing on Three.js). It works in every mode: vs bot, Pass & Play, online and spectating.
+
+- **Toggle:** "2D board / 3D board" on the home screen, plus a 2D/3D button on the board in-game. The choice is stored in `localStorage` (`cu.board`). Default is 2D.
+- **Pieces:** procedural geometry only (lathe/extrude/primitive compositions merged per material, ≤5 draw calls per piece), no external assets.
+  - *Arcane Forge 3D:* ivory and gold Ember acolytes, towers, mages and royals with glowing amber eyes, vs obsidian Tide pieces with teal trim, cyan eyes and violet gems. Every piece stands on a plinth with a glowing rim, and the pieces turn to face their player.
+  - *Classic 3D:* Staunton-style lathed pieces. Follows the existing piece-set setting.
+- **Atmosphere:** key and rim lights with soft PCF shadows, a small procedural studio environment for reflections, bloom only on HDR emissives (eyes, gems, highlights), a vignette, a framed board with gold, teal and violet inlays, rank/file labels on all four sides, and sparse floating sparkles.
+- **Interaction:** tap/click to select and move. Legal targets show as glowing dots, captures as red rings, and last-move/from squares are tinted. Pieces glide with a small hop (knights hop higher), and captured pieces shrink and sink. Numbered move badges appear for multi-move turns, and the king glows red when in check.
+- **Camera:** orbit (no pan) with polar and zoom limits, plus a reset button. The camera auto-fits the board to the viewport and sits on the bottom player's side. Reverse swings it smoothly round to the other side. Pass & Play uses a near-top-down view, and the face-to-face zones stay as they are.
+- **Performance and fallbacks:**
+  - The 3D code is a lazy chunk (~270 KB gzip) loaded only when 3D is chosen. The 2D bundle is unchanged in practice (~96 KB gzip).
+  - DPR is capped at 1.75. A `PerformanceMonitor` drops to DPR 1 with no bloom and smaller shadows if the frame rate falls.
+  - Without WebGL the 3D option is disabled and the 2D board is used. If the 3D chunk fails at runtime, it falls back to 2D.
+  - `prefers-reduced-motion` turns off particles and makes moves and camera changes instant.
+- **Screenshots:** `node scripts/board3d-shots.mjs` (needs `vite preview` on 4310 and the game server for the online flow; `ONLY=desktop,mobile,pass,classic,online,fallback`). It runs Chrome with SwiftShader WebGL and writes `screenshots/3d-*.png`.
+
+| Desktop vs bot | Mid-move | Mobile |
+|---|---|---|
+| ![](docs/screenshots/3d-desktop.jpg) | ![](docs/screenshots/3d-mid-move.jpg) | ![](docs/screenshots/3d-mobile-portrait.jpg) |
+
+| Pass & Play | Reverse spin | Check | Classic |
+|---|---|---|---|
+| ![](docs/screenshots/3d-pass-play.jpg) | ![](docs/screenshots/3d-reverse-spin.jpg) | ![](docs/screenshots/3d-check.jpg) | ![](docs/screenshots/3d-classic.jpg) |
 
 ## Rule decisions made for the MVP
 

@@ -477,3 +477,16 @@ button:disabled { cursor: default; }
 .rating-change.up b { color: #42e68a; }
 .rating-change.down b { color: var(--danger); }
 .seed-note { font-size: 11px; color: var(--muted); margin-bottom: 12px; }
+
+/* ------------------------------------------------------------ 3D board */
+.board3d { position: relative; width: calc(var(--board) + 12px); height: calc(var(--board) + 12px); border-radius: 16px; overflow: hidden;
+  background: radial-gradient(circle at 50% 40%, #1d1640, #0b0918 70%); box-shadow: 0 16px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.06); touch-action: none; }
+.board3d canvas { display: block; }
+.board3d-loading { display: grid; place-items: center; color: var(--muted); font-family: var(--display); letter-spacing: 0.06em; }
+.board3d-loading span { animation: blink 1.4s infinite; }
+.board3d-reset { position: absolute; left: 8px; top: 8px; z-index: 6; background: rgba(10, 8, 22, 0.55); backdrop-filter: blur(4px); }
+.board-mode-btn { position: absolute; right: 8px; top: 8px; z-index: 6; width: auto; padding: 0 9px; font-size: 12px; font-weight: 900; letter-spacing: 0.04em;
+  background: rgba(10, 8, 22, 0.55); backdrop-filter: blur(4px); color: var(--ember-2); }
+.board-mode-pass { top: auto; bottom: 8px; }
+.badge3d { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 900; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); }
+.seg-board { min-width: 200px; }

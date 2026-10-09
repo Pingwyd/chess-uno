@@ -3,13 +3,14 @@ import { EMOTES } from '../net/protocol';
 import { other, type PromotionPiece } from '../rules/chess';
 import { formatTurn, type GameEvent, type GameResult, type GameState, type PlayerId } from '../rules/game';
 import type { CardKind } from '../rules/cards';
-import { Board, type LastMoveAnim } from './Board';
+import type { LastMoveAnim } from './Board';
 import { PlayerZone } from './PlayerZone';
 import { CardBack, CardFace } from './Card';
 import { useGame, type GameSetup, BOT_NAMES } from './useGame';
 import type { GameTransport } from '../net/transport';
 import type { ChatMessage, EmoteId, RoomSnapshot } from '../net/protocol';
 import { ChatPanel } from './ChatPanel';
+import { BoardView, has3D, type BoardMode } from './BoardView';
 import { buzz, sfx } from './sound';
 import type { PieceSet } from './pieces';
 
@@ -28,6 +29,8 @@ export interface OnlineBinding {
 interface Props {
   setup: GameSetup;
   pieceSet: PieceSet;
+  boardMode: BoardMode;
+  onToggleBoard: () => void;
   onTogglePieces: () => void;
   onHome: () => void;
   online?: OnlineBinding;
@@ -36,15 +39,15 @@ interface Props {
 interface Reveal { key: number; kind: CardKind; toHand: boolean; capped: boolean; flip: boolean; hidden: boolean }
 interface Banner { key: number; text: string; sub?: string; tone: 'skip' | 'reverse' | 'check' | 'info' }
 
-export function GameScreen({ setup, pieceSet, onTogglePieces, onHome, online }: Props) {
+export function GameScreen(props: Props) {
   const [gameKey, setGameKey] = useState(0);
-  if (online) {
-    return <Game key={online.snap.gameId} setup={setup} gameKey={0} pieceSet={pieceSet} onTogglePieces={onTogglePieces} onHome={onHome} online={online} onRematch={online.onLeave} />;
+  if (props.online) {
+    return <Game key={props.online.snap.gameId} {...props} gameKey={0} onRematch={props.online.onLeave} />;
   }
-  return <Game key={gameKey} setup={setup} gameKey={gameKey} pieceSet={pieceSet} onTogglePieces={onTogglePieces} onHome={onHome} onRematch={() => setGameKey((k) => k + 1)} />;
+  return <Game key={gameKey} {...props} gameKey={gameKey} onRematch={() => setGameKey((k) => k + 1)} />;
 }
 
-function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch, online }: Props & { gameKey: number; onRematch: () => void }) {
+function Game({ setup, gameKey, pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, onRematch, online }: Props & { gameKey: number; onRematch: () => void }) {
   const { state, now, dispatch, error: localError } = useGame(setup, gameKey, online?.transport);
   const error = online ? online.error : localError;
   const wide = useMediaQuery('(min-width: 1000px) and (min-aspect-ratio: 5/4)');
@@ -178,7 +181,9 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch, onl
 
   const board = (
     <div className="board-wrap">
-      <Board
+      <BoardView
+        mode={boardMode}
+        onUnavailable={() => { if (boardMode === '3d') onToggleBoard(); }}
         state={state}
         bottomColor={bottomColor}
         topColor={other(bottomColor)}
@@ -189,6 +194,11 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch, onl
         onMove={(f, t) => move(f, t)}
         onPromotion={(f, t) => setPromotion({ from: f, to: t })}
       />
+      {has3D() && (
+        <button className={`icon-btn board-mode-btn ${pass ? 'board-mode-pass' : ''}`} onClick={onToggleBoard} title={boardMode === '3d' ? 'Switch to 2D board' : 'Switch to 3D board'} data-testid="toggle-board">
+          {boardMode === '3d' ? '2D' : '3D'}
+        </button>
+      )}
       {reveals[0] && <CardReveal reveal={reveals[0]} pass={pass} />}
       {bubble && (
         <div className={`chat-bubble ${bubble.seat === top ? 'bubble-top' : 'bubble-bottom'}`} key={bubble.id}>

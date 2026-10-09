@@ -4,10 +4,13 @@ import type { BotLevel } from '../engine/bot';
 import { CardFace } from './Card';
 import { Piece, type PieceSet } from './pieces';
 import type { GameSetup } from './useGame';
+import { has3D, type BoardMode } from './BoardView';
 
 interface Props {
   pieceSet: PieceSet;
   sound: boolean;
+  boardMode: BoardMode;
+  onBoardMode: (m: BoardMode) => void;
   onPieceSet: (s: PieceSet) => void;
   onSound: (on: boolean) => void;
   onStart: (setup: GameSetup) => void;
@@ -20,7 +23,7 @@ const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
   { id: 'hard', name: 'Rook', blurb: 'Hard', piece: 'R' },
 ];
 
-export function Home({ pieceSet, sound, onPieceSet, onSound, onStart, onOnline }: Props) {
+export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline }: Props) {
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
   const [rules, setRules] = useState(false);
@@ -95,6 +98,10 @@ export function Home({ pieceSet, sound, onPieceSet, onSound, onStart, onOnline }
         <div className="seg seg-small" role="radiogroup" aria-label="Piece set">
           <button className={`seg-btn ${pieceSet === 'arcane' ? 'on' : ''}`} onClick={() => onPieceSet('arcane')}>Arcane Forge</button>
           <button className={`seg-btn ${pieceSet === 'classic' ? 'on' : ''}`} onClick={() => onPieceSet('classic')}>Classic</button>
+        </div>
+        <div className="seg seg-small seg-board" role="radiogroup" aria-label="Board">
+          <button className={`seg-btn ${boardMode === '2d' ? 'on' : ''}`} onClick={() => onBoardMode('2d')} data-testid="board-2d">2D board</button>
+          <button className={`seg-btn ${boardMode === '3d' ? 'on' : ''}`} onClick={() => onBoardMode('3d')} disabled={!has3D()} title={has3D() ? '' : 'WebGL is not available on this device'} data-testid="board-3d-opt">3D board</button>
         </div>
         <button className="btn ghost small" onClick={() => onSound(!sound)}>{sound ? '🔊 Sound on' : '🔈 Sound off'}</button>
         <button className="btn ghost small" onClick={() => setRules(true)}>How to play</button>

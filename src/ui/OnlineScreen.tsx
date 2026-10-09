@@ -3,11 +3,14 @@ import { getOnlineClient, OnlineTransport, SERVER_URL, type OnlineView } from '.
 import { normalizeCode, type PublicUser } from '../net/protocol';
 import { GameScreen, type OnlineBinding } from './GameScreen';
 import type { PieceSet } from './pieces';
+import type { BoardMode } from './BoardView';
 
 export type OnlineIntent = { kind: 'join' | 'watch'; code: string } | null;
 
 interface Props {
   pieceSet: PieceSet;
+  boardMode: BoardMode;
+  onToggleBoard: () => void;
   onTogglePieces: () => void;
   onHome: () => void;
   intent: OnlineIntent;
@@ -16,7 +19,7 @@ interface Props {
 const client = getOnlineClient();
 const useOnline = (): OnlineView => useSyncExternalStore((f) => client.subscribe(f), () => client.view);
 
-export function OnlineScreen({ pieceSet, onTogglePieces, onHome, intent }: Props) {
+export function OnlineScreen({ pieceSet, boardMode, onToggleBoard, onTogglePieces, onHome, intent }: Props) {
   const view = useOnline();
   const [bootError, setBootError] = useState<string | null>(null);
   const transport = useMemo(() => new OnlineTransport(client), []);
@@ -53,6 +56,8 @@ export function OnlineScreen({ pieceSet, onTogglePieces, onHome, intent }: Props
       <GameScreen
         setup={{ mode: 'online', botLevel: 'medium', humanColor: 'w' }}
         pieceSet={pieceSet}
+        boardMode={boardMode}
+        onToggleBoard={onToggleBoard}
         onTogglePieces={onTogglePieces}
         onHome={() => { client.leave(); onHome(); }}
         online={online}
