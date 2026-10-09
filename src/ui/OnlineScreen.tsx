@@ -242,7 +242,7 @@ function AuthModal({ mode, onMode, onClose }: { mode: 'login' | 'signup'; onMode
         <label>Email<input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" /></label>
         <label>Password<input type="password" required minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete={mode === 'signup' ? 'new-password' : 'current-password'} /></label>
         {mode === 'signup' && (
-          <label>Display name <small>(optional)</small><input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} pattern="[A-Za-z0-9 _\-]{3,20}" /></label>
+          <label><span>Display name <small>(optional)</small></span><input value={name} onChange={(e) => setName(e.target.value)} maxLength={20} pattern="[A-Za-z0-9 _\-]{3,20}" /></label>
         )}
         {err && <div className="auth-error">{err}</div>}
         <div className="panel-actions">

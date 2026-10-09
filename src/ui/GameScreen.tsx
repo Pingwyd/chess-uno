@@ -202,7 +202,7 @@ function Game({ setup, gameKey, pieceSet, onTogglePieces, onHome, onRematch, onl
   );
 
   return (
-    <div className={`game game-${setup.mode}`} data-testid="game">
+    <div className={`game game-${setup.mode}`} data-testid="game" data-turns={state.history.length}>
       {pass ? (
         <>
           {zone(top, true)}

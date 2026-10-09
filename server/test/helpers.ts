@@ -2,8 +2,26 @@ import WebSocket from 'ws';
 import { createApp, type App } from '../src/app';
 import type { ClientMsg, ServerMsg, RoomSnapshot } from '../../src/net/protocol';
 
+/**
+ * Each test gets a fresh database: in-memory SQLite by default, or a brand-new Postgres
+ * database when TEST_DATABASE_URL=postgres://… is set (checks the schema stays portable).
+ */
+async function freshDatabaseUrl(): Promise<string> {
+  const base = process.env.TEST_DATABASE_URL;
+  if (!base || !/^postgres/.test(base)) return ':memory:';
+  const pg = (await import('pg')).default;
+  const admin = new pg.Client({ connectionString: base });
+  await admin.connect();
+  const name = `cu_test_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+  await admin.query(`CREATE DATABASE ${name}`);
+  await admin.end();
+  const u = new URL(base);
+  u.pathname = `/${name}`;
+  return u.toString();
+}
+
 export async function startApp(over: Parameters<typeof createApp>[0] = {}) {
-  const app = await createApp({ databaseUrl: ':memory:', jwtSecret: 'test-secret', clockMs: 600_000, disconnectGraceMs: 60_000, ...over });
+  const app = await createApp({ databaseUrl: await freshDatabaseUrl(), jwtSecret: 'test-secret', clockMs: 600_000, disconnectGraceMs: 60_000, ...over });
   const port = await app.listen(0);
   return { app, port, base: `http://localhost:${port}` };
 }
