@@ -14,13 +14,15 @@ import { Auth, toPublicUser } from './auth';
 import { Room, type Client, type RoomHost } from './room';
 import { updateElo } from './rating';
 import { Social, friendInfo } from './social';
+import { asTimeControl, type TimeControl } from '../../src/rules/timeControl';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const HELLO_TIMEOUT_MS = 10_000;
 const FINISHED_ROOM_TTL_MS = 10 * 60_000;
 const LIVE_THROTTLE_MS = 1000;
 
-interface QueueEntry { client: Client; rated: boolean; rating: number; since: number }
+/** One queue per (rated, time control); a single rating is shared across controls. */
+interface QueueEntry { client: Client; rated: boolean; tc: TimeControl; rating: number; since: number }
 interface Challenge { info: ChallengeInfo; timer: NodeJS.Timeout }
 
 export class Hub {
@@ -142,6 +144,7 @@ export class Hub {
       void this.presenceChanged(client.user.id);
     }
     this.removeFromQueue(client);
+    this.withdrawRematches(client.user.id);
     if (client.spectating) this.rooms.get(client.spectating)?.detach(client);
     const code = this.userRoom.get(client.user.id);
     if (code) this.rooms.get(code)?.detach(client);
@@ -166,8 +169,9 @@ export class Hub {
         // Guests can play casual games only; ranked needs an account (design doc §11.1).
         const fresh = await this.refreshUser(client);
         const rated = !fresh.is_guest;
-        this.queue.push({ client, rated, rating: fresh.rating, since: this.now() });
-        client.send({ t: 'queued', rated });
+        const tc = asTimeControl(msg.tc);
+        this.queue.push({ client, rated, tc, rating: fresh.rating, since: this.now() });
+        client.send({ t: 'queued', rated, tc });
         this.tryMatch();
         return;
       }
@@ -180,11 +184,11 @@ export class Hub {
         this.removeFromQueue(client);
         this.leaveSpectating(client);
         await this.refreshUser(client);
-        const room = new Room(this.newCode(), false, this.roomHost, true);
+        const room = new Room(this.newCode(), false, this.roomHost, true, { tc: asTimeControl(msg.tc) });
         room.addPlayer(client);
         this.rooms.set(room.code, room);
         this.userRoom.set(uid, room.code);
-        client.send({ t: 'roomCreated', code: room.code });
+        client.send({ t: 'roomCreated', code: room.code, tc: room.tc });
         return;
       }
       case 'joinRoom': {
@@ -211,6 +215,7 @@ export class Hub {
       }
       case 'leave': {
         this.removeFromQueue(client);
+        this.withdrawRematches(uid, true);
         this.leaveSpectating(client);
         const room = this.activeRoomOf(uid);
         if (room?.status === 'waiting') room.close();
@@ -219,7 +224,11 @@ export class Hub {
         return;
       }
       case 'challenge':
-        return this.challenge(client, msg.userId);
+        return this.challenge(client, msg.userId, asTimeControl(msg.tc));
+      case 'rematch':
+        return this.rematch(client, String(msg.code ?? ''));
+      case 'rematchDecline':
+        return this.rematchDecline(client, String(msg.code ?? ''));
       case 'challengeReply':
         return this.replyChallenge(client, msg.id, !!msg.accept);
       case 'live':
@@ -266,7 +275,7 @@ export class Hub {
       if (used.has(a)) continue;
       let best: QueueEntry | null = null;
       for (const b of sorted) {
-        if (b === a || used.has(b) || b.rated !== a.rated) continue;
+        if (b === a || used.has(b) || b.rated !== a.rated || b.tc !== a.tc) continue;
         const diff = Math.abs(a.rating - b.rating);
         if (diff > Math.max(window(a), window(b))) continue;
         if (!best || diff < Math.abs(a.rating - best.rating)) best = b;
@@ -281,7 +290,7 @@ export class Hub {
   }
 
   private async startMatch(a: QueueEntry, b: QueueEntry) {
-    const room = new Room(this.newCode(), a.rated && b.rated, this.roomHost);
+    const room = new Room(this.newCode(), a.rated && b.rated, this.roomHost, false, { tc: a.tc });
     room.addPlayer(a.client);
     room.addPlayer(b.client);
     this.rooms.set(room.code, room);
@@ -405,7 +414,7 @@ export class Hub {
 
   // ------------------------------------------------------------ challenges
 
-  private async challenge(client: Client, targetId: string) {
+  private async challenge(client: Client, targetId: string, tc: TimeControl) {
     const me = await this.refreshUser(client);
     const fail = (message: string) => client.send({ t: 'error', code: 'challenge', message });
     if (me.is_guest) return fail('Create a free account to challenge friends');
@@ -418,18 +427,18 @@ export class Hub {
     for (const c of this.challenges.values()) if (c.info.from.id === me.id) return fail('You already have a challenge waiting');
     this.removeFromQueue(client);
     this.leaveSpectating(client);
-    const room = new Room(this.newCode(), false, this.roomHost, true);
+    const room = new Room(this.newCode(), false, this.roomHost, true, { tc });
     room.invitee = friendInfo(target.user);
     room.addPlayer(client);
     this.rooms.set(room.code, room);
     this.userRoom.set(me.id, room.code);
     const info: ChallengeInfo = {
-      id: randomUUID(), from: friendInfo(me), to: friendInfo(target.user), code: room.code, expiresAt: this.now() + this.cfg.challengeTtlMs,
+      id: randomUUID(), from: friendInfo(me), to: friendInfo(target.user), code: room.code, tc, expiresAt: this.now() + this.cfg.challengeTtlMs,
     };
     const timer = setTimeout(() => this.lapseChallenge(info.id, 'expired'), this.cfg.challengeTtlMs);
     timer.unref?.();
     this.challenges.set(info.id, { info, timer });
-    client.send({ t: 'roomCreated', code: room.code, invitee: info.to });
+    client.send({ t: 'roomCreated', code: room.code, tc, invitee: info.to });
     target.send({ t: 'challenge', challenge: info });
   }
 
@@ -475,6 +484,69 @@ export class Hub {
     await room.start();
   }
 
+  // ------------------------------------------------------------ rematch
+
+  /**
+   * Offer a rematch in a finished room, or accept the opponent's open offer. On accept both
+   * players move to a fresh room with the same settings (rated, private, time control) and
+   * swapped colours. Offers lapse when either player leaves, disconnects, or starts another game.
+   */
+  private async rematch(client: Client, code: string) {
+    const uid = client.user.id;
+    const room = this.rooms.get(normalizeCode(code));
+    const fail = (message: string) => client.send({ t: 'error', code: 'rematch', message });
+    const seat = room ? room.seatOf(uid) : null;
+    if (!room || seat === null || room.status !== 'over') return fail('That game is no longer available');
+    const other = (1 - seat) as 0 | 1;
+    const opp = room.seats[other]!;
+    if (!opp.client || room.leftSeats.has(other) || this.userClient.get(opp.user.id) !== opp.client) return fail(`${opp.user.name} has left`);
+    if (this.activeRoomOf(uid)) return fail('You are already in a game');
+    if (this.activeRoomOf(opp.user.id)) return fail(`${opp.user.name} is already in another game`);
+    if (room.rematchBy === seat) return; // already offered
+    if (room.rematchBy === null) {
+      room.rematchBy = seat;
+      for (const s of room.seats) s?.client?.send({ t: 'rematch', code: room.code, status: 'offered', by: seat });
+      return;
+    }
+    // The opponent offered: start the new game with colours swapped.
+    room.rematchBy = null;
+    const next = new Room(this.newCode(), room.rated, this.roomHost, room.isPrivate, {
+      tc: room.tc, player0Color: room.player0Color === 'w' ? 'b' : 'w',
+    });
+    const clients = [room.seats[0]!.client!, room.seats[1]!.client!];
+    for (const c of clients) {
+      this.removeFromQueue(c);
+      this.leaveSpectating(c);
+      await this.refreshUser(c);
+      next.addPlayer(c);
+      this.userRoom.set(c.user.id, next.code);
+    }
+    this.rooms.set(next.code, next);
+    await next.start();
+  }
+
+  private rematchDecline(client: Client, code: string) {
+    const room = this.rooms.get(normalizeCode(code));
+    const seat = room ? room.seatOf(client.user.id) : null;
+    if (!room || seat === null || room.rematchBy === null) return;
+    const status = room.rematchBy === seat ? 'cancelled' : 'declined';
+    room.rematchBy = null;
+    for (const s of room.seats) s?.client?.send({ t: 'rematch', code: room.code, status, by: seat });
+  }
+
+  /** A player left the finished game (or went offline): any open offer in their rooms lapses. */
+  private withdrawRematches(userId: string, left = false) {
+    for (const room of this.rooms.values()) {
+      if (room.status !== 'over') continue;
+      const seat = room.seatOf(userId);
+      if (seat === null) continue;
+      if (left) room.leftSeats.add(seat);
+      if (room.rematchBy === null) continue;
+      room.rematchBy = null;
+      for (const s of room.seats) if (s && s.user.id !== userId) s.client?.send({ t: 'rematch', code: room.code, status: 'cancelled', by: seat });
+    }
+  }
+
   // ------------------------------------------------------------ live games
 
   /**
@@ -494,7 +566,7 @@ export class Hub {
       const players: [FriendInfo, FriendInfo] = [friendInfo(a.user), friendInfo(b.user)];
       out.push({
         code: room.code, rated: room.rated, private: room.isPrivate, players, friend,
-        spectators: room.spectators.size, turn: room.state.turnNumber, startedAt: room.startedAt,
+        spectators: room.spectators.size, turn: room.state.turnNumber, startedAt: room.startedAt, tc: room.tc,
       });
     }
     const score = (g: LiveGame) => (g.players[0].rating + g.players[1].rating) / 2;

@@ -3,6 +3,7 @@
  * Messages are JSON over a single WebSocket per client.
  */
 import type { GameAction, GameState, PlayerId } from '../rules/game';
+import type { TimeControl } from '../rules/timeControl';
 
 /** Quick emotes: id → label. The client draws each with a Lucide icon (no emoji). Old ids stay valid. */
 export const EMOTES = {
@@ -82,6 +83,8 @@ export interface ChallengeInfo {
   from: FriendInfo;
   to: FriendInfo;
   code: string;
+  /** Clock for the game (absent from old servers = rapid). */
+  tc?: TimeControl;
   /** Server time the challenge lapses. */
   expiresAt: number;
 }
@@ -99,6 +102,7 @@ export interface LiveGame {
   spectators: number;
   turn: number;
   startedAt: number;
+  tc?: TimeControl;
 }
 
 export interface RatingPoint { t: number; r: number }
@@ -158,28 +162,35 @@ export interface RoomSnapshot {
   spectators: number;
   serverNow: number;
   result: RoomResultInfo | null;
+  tc?: TimeControl;
+  /** Open rematch offer after the game (seat that offered), or null. */
+  rematchBy?: PlayerId | null;
 }
 
 export type ClientMsg =
   | { t: 'hello'; token: string }
-  | { t: 'queue' }
+  | { t: 'queue'; tc?: TimeControl }
   | { t: 'cancelQueue' }
-  | { t: 'createRoom' }
+  | { t: 'createRoom'; tc?: TimeControl }
   | { t: 'joinRoom'; code: string }
   | { t: 'spectate'; code: string }
   | { t: 'action'; action: GameAction }
   | { t: 'chat'; text?: string; emote?: EmoteId }
   | { t: 'leave' }
   | { t: 'ping'; at: number }
-  | { t: 'challenge'; userId: string }
+  | { t: 'challenge'; userId: string; tc?: TimeControl }
+  /** Offer a rematch after a finished game (or accept the opponent's offer). Colours swap. */
+  | { t: 'rematch'; code: string }
+  /** Decline the opponent's offer, or withdraw your own. */
+  | { t: 'rematchDecline'; code: string }
   | { t: 'challengeReply'; id: string; accept: boolean }
   | { t: 'live'; on: boolean };
 
 export type ServerMsg =
   | { t: 'welcome'; user: PublicUser; activeRoom: string | null }
-  | { t: 'queued'; rated: boolean }
+  | { t: 'queued'; rated: boolean; tc?: TimeControl }
   | { t: 'queueCancelled' }
-  | { t: 'roomCreated'; code: string; invitee?: FriendInfo }
+  | { t: 'roomCreated'; code: string; invitee?: FriendInfo; tc?: TimeControl }
   | { t: 'room'; snap: RoomSnapshot }
   | { t: 'chat'; msg: ChatMessage }
   | { t: 'chatHistory'; msgs: ChatMessage[] }
@@ -191,7 +202,8 @@ export type ServerMsg =
   | { t: 'social'; event: SocialEvent; user: FriendInfo }
   | { t: 'challenge'; challenge: ChallengeInfo }
   | { t: 'challengeUpdate'; id: string; status: 'accepted' | 'declined' | 'cancelled' | 'expired'; by: string }
-  | { t: 'liveGames'; games: LiveGame[] };
+  | { t: 'liveGames'; games: LiveGame[] }
+  | { t: 'rematch'; code: string; status: 'offered' | 'declined' | 'cancelled'; by: PlayerId };
 
 /** Normalise an invite code typed or pasted by a user (accepts full links too). */
 export function normalizeCode(input: string): string {

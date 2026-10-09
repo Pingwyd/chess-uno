@@ -354,3 +354,95 @@ describe('spectators and chat', () => {
     void a; void b;
   });
 });
+
+describe('time controls', () => {
+  const account = async (base: string, port: number, email: string) => {
+    const r = await api(base, '/api/signup', { email, password: 'password123', name: email.split('@')[0] });
+    const c = new TestClient(port, r.json.token);
+    await c.connect();
+    return c;
+  };
+  it('quick match keeps one queue per time control; the room clock follows the control', async () => {
+    const s = await startApp(); app = s.app;
+    const a = await account(s.base, s.port, 'fay@x.io');
+    const b = await account(s.base, s.port, 'gus@x.io');
+    const c = await account(s.base, s.port, 'hal@x.io');
+    a.send({ t: 'queue', tc: 'blitz' });
+    expect(await a.waitFor((m) => m.t === 'queued')).toMatchObject({ rated: true, tc: 'blitz' });
+    b.send({ t: 'queue', tc: 'bullet' });
+    await b.waitFor((m) => m.t === 'queued');
+    await new Promise((r) => setTimeout(r, 1200));
+    expect(a.snap).toBeNull(); // same rating, different controls: no match
+    c.send({ t: 'queue', tc: 'blitz' });
+    const snap = await a.waitSnap(() => true);
+    expect(snap.tc).toBe('blitz');
+    expect(snap.state.config.clockMs).toBe(5 * 60_000);
+    expect(snap.state.clocks).toEqual([5 * 60_000, 5 * 60_000]);
+    expect(s.app.hub.queue.map((q) => [q.client.user.email, q.tc])).toEqual([['gus@x.io', 'bullet']]);
+  });
+  it('rooms and challenges carry the control; unknown values fall back to rapid (server clock)', async () => {
+    const s = await startApp({ clockMs: 420_000 }); app = s.app;
+    const a = await TestClient.guest(s.base, s.port);
+    const b = await TestClient.guest(s.base, s.port);
+    a.send({ t: 'createRoom', tc: 'bullet' });
+    const created = await a.waitFor<{ t: 'roomCreated'; code: string; tc: string }>((m) => m.t === 'roomCreated');
+    expect(created.tc).toBe('bullet');
+    b.send({ t: 'joinRoom', code: created.code });
+    expect((await b.waitSnap(() => true)).state.config.clockMs).toBe(3 * 60_000);
+    const c = await TestClient.guest(s.base, s.port);
+    c.send({ t: 'createRoom', tc: 'hyper' as never });
+    expect(await c.waitFor((m) => m.t === 'roomCreated')).toMatchObject({ tc: 'rapid' });
+    expect(s.app.hub.rooms.get((c.msgs.find((m) => m.t === 'roomCreated') as { code: string }).code)!.clockMs).toBe(420_000);
+  });
+});
+
+describe('rematch', () => {
+  const finish = async (a: TestClient, b: TestClient) => {
+    a.send({ t: 'action', action: { type: 'resign', player: a.snap!.you! } });
+    await a.waitSnap((x) => !!x.result);
+    return b.waitSnap((x) => !!x.result);
+  };
+  it('offer + accept starts a new game with the same seats and swapped colours', async () => {
+    const s = await startApp(); app = s.app;
+    const { a, b, code } = await privateGame(s.base, s.port);
+    const first = a.snap!;
+    await finish(a, b);
+    a.send({ t: 'rematch', code });
+    const offer = await b.waitFor((m) => m.t === 'rematch');
+    expect(offer).toMatchObject({ status: 'offered', by: first.you });
+    expect(s.app.hub.rooms.get(code)!.rematchBy).toBe(first.you);
+    b.send({ t: 'rematch', code });
+    const next = await a.waitSnap((x) => x.code !== code);
+    expect(next.gameId).not.toBe(first.gameId);
+    expect(next.you).toBe(first.you);
+    expect(next.state.colorOf[next.you!]).not.toBe(first.state.colorOf[first.you!]);
+    expect(next.rated).toBe(first.rated);
+    expect(next.tc).toBe(first.tc);
+    expect((await b.waitSnap((x) => x.code === next.code)).state.phase).not.toBe('over');
+  });
+  it('decline, withdraw, and leaving cancel the offer; no rematch after the opponent left', async () => {
+    const s = await startApp(); app = s.app;
+    const { a, b, code } = await privateGame(s.base, s.port);
+    await finish(a, b);
+    a.send({ t: 'rematch', code });
+    await b.waitFor((m) => m.t === 'rematch');
+    let n = a.msgs.length;
+    b.send({ t: 'rematchDecline', code });
+    expect(await a.waitFor((m) => m.t === 'rematch', 4000, n)).toMatchObject({ status: 'declined', by: b.snap!.you });
+    n = b.msgs.length;
+    a.send({ t: 'rematch', code });
+    await b.waitFor((m) => m.t === 'rematch' && m.status === 'offered', 4000, n);
+    n = b.msgs.length;
+    a.send({ t: 'rematchDecline', code }); // withdraw own offer
+    expect(await b.waitFor((m) => m.t === 'rematch', 4000, n)).toMatchObject({ status: 'cancelled' });
+    a.send({ t: 'rematch', code });
+    await b.waitFor((m) => m.t === 'rematch' && m.status === 'offered', 4000, n + 1);
+    n = b.msgs.length;
+    a.send({ t: 'leave' });
+    expect(await b.waitFor((m) => m.t === 'rematch', 4000, n)).toMatchObject({ status: 'cancelled' });
+    expect(s.app.hub.rooms.get(code)!.rematchBy).toBeNull();
+    n = b.msgs.length;
+    b.send({ t: 'rematch', code });
+    expect(await b.waitFor((m) => m.t === 'error', 4000, n)).toMatchObject({ code: 'rematch', message: expect.stringMatching(/left/) });
+  });
+});
