@@ -5,6 +5,10 @@ import { CardFace } from './Card';
 import { Piece, type PieceSet } from './pieces';
 import type { GameSetup } from './useGame';
 import { has3D, type BoardMode } from './BoardView';
+import { useProgress } from '../learn/store';
+import { OUTLINE_SHAPE as PATH_SHAPE, lessonTitle } from '../learn/outline';
+import { localDay, nextLesson, pathOrder, streak, utcDay } from '../learn/progress';
+import type { LearnTab } from './learn/LearnScreen';
 
 interface Props {
   pieceSet: PieceSet;
@@ -15,6 +19,7 @@ interface Props {
   onSound: (on: boolean) => void;
   onStart: (setup: GameSetup) => void;
   onOnline: () => void;
+  onLearn: (tab: LearnTab) => void;
 }
 
 const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
@@ -23,7 +28,8 @@ const LEVELS: { id: BotLevel; name: string; blurb: string; piece: string }[] = [
   { id: 'hard', name: 'Rook', blurb: 'Hard', piece: 'R' },
 ];
 
-export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline }: Props) {
+export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSound, onStart, onOnline, onLearn }: Props) {
+  const progress = useProgress();
   const [level, setLevel] = useState<BotLevel>('medium');
   const [side, setSide] = useState<'w' | 'b' | 'random'>('w');
   const [rules, setRules] = useState(false);
@@ -49,6 +55,8 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
         </h1>
         <p className="tagline">Draw a card. Make that many moves. Outwit the deck.</p>
       </div>
+
+      <LearnCard progress={progress} onLearn={onLearn} />
 
       <div className="modes">
         <button className="mode-card mode-pass" onClick={() => onStart({ mode: 'pass', botLevel: 'medium', humanColor: 'w' })} data-testid="mode-pass">
@@ -125,5 +133,31 @@ export function Home({ pieceSet, sound, boardMode, onBoardMode, onPieceSet, onSo
         </div>
       )}
     </div>
+  );
+}
+
+function LearnCard({ progress, onLearn }: { progress: ReturnType<typeof useProgress>; onLearn: (t: LearnTab) => void }) {
+  const total = pathOrder(PATH_SHAPE).length;
+  const done = pathOrder(PATH_SHAPE).filter((id) => progress.lessons[id]).length;
+  const next = nextLesson(progress, PATH_SHAPE);
+  const st = streak(progress, localDay());
+  const dailyDone = !!progress.daily[utcDay()];
+  return (
+    <section className="learn-home" data-testid="learn-card">
+      <button className="learn-home-main" onClick={() => onLearn('path')} data-testid="open-learn">
+        <div className="learn-home-icon">🎓</div>
+        <div className="learn-home-text">
+          <h2>Learn</h2>
+          <p>{next ? `${done ? 'Continue' : 'Start'}: ${lessonTitle(next)}` : 'Path complete — ranked unlocked!'}</p>
+          <div className="learn-home-meter"><div style={{ width: `${(done / total) * 100}%` }} /></div>
+          <small>{done}/{total} lessons · ⚡ {progress.xp} XP · 🔥 {st} day{st === 1 ? '' : 's'}</small>
+        </div>
+      </button>
+      <button className={`learn-home-daily ${dailyDone ? 'done' : ''}`} onClick={() => onLearn('daily')} data-testid="open-daily">
+        <span>{dailyDone ? '✓' : '📅'}</span>
+        <b>Daily puzzle</b>
+        <small>{dailyDone ? 'Solved' : '+20 XP'}</small>
+      </button>
+    </section>
   );
 }

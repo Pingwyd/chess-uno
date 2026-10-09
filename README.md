@@ -54,12 +54,16 @@ src/
               the server), online.ts (OnlineClient + OnlineTransport)
   ui/         React screens/components, pieces/ (SVG sets), styles.css,
               useBoardInteraction.ts (selection/targets shared by 2D and 3D), BoardView.tsx (2D/3D switch),
-              three/ (lazy 3D board: Board3D.tsx, pieceGeometry.ts, materials.ts, mapping.ts)
+              three/ (lazy 3D board: Board3D.tsx, pieceGeometry.ts, materials.ts, mapping.ts),
+              learn/ (lazy learning-path screens: LearnScreen, LessonPlayer, PuzzleView, DemoBoard)
+  learn/      learning path: types, engine.ts (puzzle runner/judge/solver), progress.ts (XP/streak/badges,
+              shared with the server), store.ts (localStorage + /api/learn sync), outline.ts, content/
 server/       Node game server (npm workspace): src/{index,app,hub,room,redact,auth,http,db,rating,config}.ts
               and test/ (two simulated clients over real sockets)
-tests/        Vitest: chess.test.ts (perft etc.), game.test.ts (card rules), bot.test.ts, board3d.test.ts
+tests/        Vitest: chess.test.ts (perft etc.), game.test.ts (card rules), bot.test.ts, board3d.test.ts,
+              learn.test.ts (every puzzle verified against the engine + progress model)
 docs/         DESIGN.md, screenshots/
-scripts/      screenshots.mjs, reverse-shot.mjs, online-e2e.mjs, board3d-shots.mjs (Playwright), preview-pieces.tsx
+scripts/      screenshots.mjs, reverse-shot.mjs, online-e2e.mjs, board3d-shots.mjs, learn-shots.mjs (Playwright), preview-pieces.tsx
 ```
 
 ### Built to grow
@@ -140,7 +144,7 @@ An alternate renderer of the same game (react-three-fiber + drei + postprocessin
 - **Interaction:** tap/click to select and move. Legal targets show as glowing dots, captures as red rings, and last-move/from squares are tinted. Pieces glide with a small hop (knights hop higher), and captured pieces shrink and sink. Numbered move badges appear for multi-move turns, and the king glows red when in check.
 - **Camera:** orbit (no pan) with polar and zoom limits, plus a reset button. The camera auto-fits the board to the viewport and sits on the bottom player's side. Reverse swings it smoothly round to the other side. Pass & Play uses a near-top-down view, and the face-to-face zones stay as they are.
 - **Performance and fallbacks:**
-  - The 3D code is a lazy chunk (~270 KB gzip) loaded only when 3D is chosen. The 2D bundle is unchanged in practice (~96 KB gzip).
+  - The 3D code is a lazy chunk (~270 KB gzip) loaded only when 3D is chosen. The main 2D bundle stays small (~100 KB gzip, including the learning-path home card).
   - DPR is capped at 1.75. A `PerformanceMonitor` drops to DPR 1 with no bloom and smaller shadows if the frame rate falls.
   - Without WebGL the 3D option is disabled and the 2D board is used. If the 3D chunk fails at runtime, it falls back to 2D.
   - `prefers-reduced-motion` turns off particles and makes moves and camera changes instant.
@@ -153,6 +157,51 @@ An alternate renderer of the same game (react-three-fiber + drei + postprocessin
 | Pass & Play | Reverse spin | Check | Classic |
 |---|---|---|---|
 | ![](docs/screenshots/3d-pass-play.jpg) | ![](docs/screenshots/3d-reverse-spin.jpg) | ![](docs/screenshots/3d-check.jpg) | ![](docs/screenshots/3d-classic.jpg) |
+
+## Learning path
+
+A Duolingo-style path that teaches Chess Uno from zero. Open it with **Learn** on the home screen (or `?learn` in the URL). It is fully offline; it works with the 2D and 3D boards and is mobile-first, with a side-by-side layout on wide screens.
+
+- **Path map:** a winding path of nodes for 24 short (1–3 min) lessons in 5 units. Lessons unlock in order, and each unit ends in a badge trophy.
+  1. **Chess basics** (6 lessons): piece moves, check, checkmate, castling, promotion, en passant. Experienced players can test out with a 5-question placement check (pass with at most 1 mistake). That marks the unit done at 1 star; you can replay any lesson for more stars.
+  2. **The cards** (5): drawing, moves in a row, every move counts, quiet setup then mate with a 3, escaping then striking.
+  3. **Check ends your turn** (4): holding back a check, check as the final move, and when checks waste moves.
+  4. **Skip & Reverse** (5): holding cards, when to save a Skip, Reverse timing, and the 5-turn Reverse protection.
+  5. **Strategy** (4): defending against 3-move turns (luft, guards, cutting a plan short with a check), the clock, and Chess Uno tactics.
+- **Step types:**
+  - Explainers with animated board demos that loop, with captions taken from the engine's events.
+  - Multiple-choice questions.
+  - Interactive puzzles: a fixed position plus fixed card(s), and sometimes a hand of Skip/Reverse cards.
+- **Puzzles run on the real rules engine** (`src/rules`, unchanged). The learner's moves go through `applyAction`, and the puzzle ends when the learner's turn ends (card used up, check, mate, Skip/Reverse). The result is then judged on the final state against declarative goals: `mate`, `check`, `occupy`, `capture`, `captureType`, `promote`, `safe` (the opponent can't mate with an N-move turn), `keep` (the opponent can't win a given piece), `keepCard`, `lead` (material lead) and `noCheck`. **Any line that meets the goals is accepted**, not just the authored one. An early check that ends your turn gets its own explanation.
+- **Help:** hints (they cost a star), Reset, "Show solution" after a miss (it animates the line), and a 2D/3D toggle. There are no hearts: mistakes only lower the stars.
+- **Gamification:**
+  - **XP:** 10 + 5 per star for a lesson; replays earn 5 + 5 per extra star; 20 for the daily puzzle, 30 for passing placement.
+  - **Daily streak** with one streak freeze. The freeze bridges one missed day and refills every 7 streak days.
+  - **1–3 stars** per lesson: 0 slips earns 3, 1–2 slips earn 2, and a hint counts as a slip.
+  - **Daily puzzle:** the same one for everyone, picked by UTC date from a pool of 8, with a week strip.
+  - **11 badges.** Four of them unlock **piece skins** for the Arcane Forge set in both 2D and 3D: Card Shark → *Frost Ember*, Patient Hunter → *Rose Tide*, Graduate → *Gilded Ember*, Unstoppable (7-day streak) → *Aurora Tide*. Equip skins on the Badges tab.
+  - **Ranked unlock:** finishing the whole path sets `rankedUnlocked`. For now it is **client-side and informational**: the Quick Match card shows the status, but nothing is enforced on the server.
+  - Lesson complete gets confetti, a star pop and an XP count-up, all disabled under `prefers-reduced-motion`.
+- **Progress storage:** `localStorage` (`cu.learn`) for everyone. Signed-in (non-guest) online accounts also sync through `GET/POST /api/learn` (JWT; 401 without a token, 403 for guests). The server stores one JSON row per user (`learn_progress`, migration `002_learn`). It sanitizes and **merges** uploads with the stored copy, using the same `mergeProgress` the client uses: best stars, unions of days, badges and dailies, max XP, and the newest settings. Nothing earned is lost across devices.
+- **Content validation:** `tests/learn.test.ts` covers all **55 puzzles** (44 in lessons, 3 in placement, 8 daily):
+  - It plays each authored solution through the engine and checks the goals.
+  - It exhaustively enumerates every legal line, checks the accepted solution set is non-empty and contains the authored line, and that key puzzles really need the full card (no solution with one move fewer).
+  - It replays every demo script and checks ids, MCQ answers and lesson length.
+  - It also unit-tests the progress model: unlocking, XP, stars, streak and freeze, placement, daily, badges and skins, merge and sanitize.
+- **Code:** `src/learn/` (types, `engine.ts` puzzle runner/judge/solver, `progress.ts` pure model shared with the server, `store.ts` local + server sync, `outline.ts` tiny id/title outline for the home screen, `content/` units + daily pool) and `src/ui/learn/` (lazy-loaded chunk, ~21 KB gzip).
+- **Screenshots:** `node scripts/learn-shots.mjs` (needs `vite preview` on 4310; `ONLY=mobile,desktop,placement,3d`). It plays real lessons by tapping squares and writes `screenshots/learn-*.png`.
+
+| Path map | Explainer + demo | Puzzle in progress | Wrong | Correct |
+|---|---|---|---|---|
+| ![](docs/screenshots/learn-path-mobile.jpg) | ![](docs/screenshots/learn-explainer-mobile.jpg) | ![](docs/screenshots/learn-puzzle-mobile.jpg) | ![](docs/screenshots/learn-wrong-mobile.jpg) | ![](docs/screenshots/learn-correct-mobile.jpg) |
+
+| Lesson complete | Badge + skin reward | Badges | Daily | Daily puzzle |
+|---|---|---|---|---|
+| ![](docs/screenshots/learn-complete-mobile.jpg) | ![](docs/screenshots/learn-badge-earned-mobile.jpg) | ![](docs/screenshots/learn-badges-mobile.jpg) | ![](docs/screenshots/learn-daily-mobile.jpg) | ![](docs/screenshots/learn-daily-puzzle-mobile.jpg) |
+
+| Desktop path | Desktop puzzle | 3D puzzle |
+|---|---|---|
+| ![](docs/screenshots/learn-path-desktop.jpg) | ![](docs/screenshots/learn-puzzle-desktop.jpg) | ![](docs/screenshots/learn-puzzle-3d.jpg) |
 
 ## Rule decisions made for the MVP
 
@@ -172,4 +221,4 @@ These follow `docs/DESIGN.md`. Where the doc left a gap, this is what the code d
 
 ## Not in the MVP yet
 
-A leaderboard screen beyond the lobby top 10, seasons, friends lists, rematch offers, draw offers, replay/AI review, the learning path, 3D, monetization, and bot levels 4–5 (Bishop and Queen). Online play is groundwork: it hasn't been deployed or load-tested. See the roadmap in `docs/DESIGN.md` §13.
+A leaderboard screen beyond the lobby top 10, seasons, friends lists, rematch offers, draw offers, replay/AI review, server-enforced ranked unlock, monetization, and bot levels 4–5 (Bishop and Queen). Online play is groundwork: it hasn't been deployed or load-tested. See the roadmap in `docs/DESIGN.md` §13.

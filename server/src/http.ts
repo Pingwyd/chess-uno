@@ -4,16 +4,17 @@ import type { Kysely } from 'kysely';
 import type { Database } from './db';
 import { Auth, AuthError, toPublicUser } from './auth';
 import type { ServerConfig } from './config';
+import { mergeProgress, sanitize } from '../../src/learn/progress';
 
 const MAX_BODY = 16 * 1024;
 
-function readJson(req: IncomingMessage): Promise<Record<string, unknown>> {
+function readJson(req: IncomingMessage, max = MAX_BODY): Promise<Record<string, unknown>> {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > MAX_BODY) { reject(new AuthError(413, 'Body too large')); req.destroy(); return; }
+      if (size > max) { reject(new AuthError(413, 'Body too large')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => {
@@ -78,6 +79,24 @@ export function createHttpHandler(db: Kysely<Database>, auth: Auth, cfg: ServerC
         const user = await auth.verify(bearer(req));
         if (!user) return send(401, { error: 'Not signed in' });
         return send(200, { user: toPublicUser(user) });
+      }
+      if (url.pathname === '/api/learn' && (req.method === 'GET' || req.method === 'POST')) {
+        // Learning-path progress sync. Guests keep progress on their device only.
+        const user = await auth.verify(bearer(req));
+        if (!user) return send(401, { error: 'Not signed in' });
+        if (user.is_guest) return send(403, { error: 'Sign up to sync learning progress' });
+        const row = await db.selectFrom('learn_progress').selectAll().where('user_id', '=', user.id).executeTakeFirst();
+        const stored = row ? sanitize(JSON.parse(row.data)) : null;
+        if (req.method === 'GET') return send(200, { progress: stored });
+        const body = await readJson(req, 64 * 1024);
+        const incoming = sanitize(body.progress);
+        // Merge rather than overwrite, so two devices never lose each other's progress.
+        const merged = stored ? mergeProgress(stored, incoming) : incoming;
+        const data = JSON.stringify(merged);
+        const updated_at = new Date().toISOString();
+        if (row) await db.updateTable('learn_progress').set({ data, updated_at }).where('user_id', '=', user.id).execute();
+        else await db.insertInto('learn_progress').values({ user_id: user.id, data, updated_at }).execute();
+        return send(200, { progress: merged });
       }
       if (req.method === 'GET' && url.pathname === '/api/leaderboard') {
         const rows = await db.selectFrom('users').selectAll().where('is_guest', '=', 0).where('rated_games', '>', 0)

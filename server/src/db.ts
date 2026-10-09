@@ -43,9 +43,17 @@ export interface GamesTable {
   ended_at: string | null;
 }
 
+/** Learning-path progress for signed-in accounts (JSON from src/learn/progress.ts). */
+export interface LearnTable {
+  user_id: string;
+  data: string;
+  updated_at: string;
+}
+
 export interface Database {
   users: UsersTable;
   games: GamesTable;
+  learn_progress: LearnTable;
 }
 
 const migrations: Record<string, Migration> = {
@@ -86,6 +94,15 @@ const migrations: Record<string, Migration> = {
         .execute();
       await db.schema.createIndex('games_p0_idx').on('games').column('player0_id').execute();
       await db.schema.createIndex('games_p1_idx').on('games').column('player1_id').execute();
+    },
+  },
+  '002_learn': {
+    async up(db: Kysely<any>) {
+      await db.schema.createTable('learn_progress')
+        .addColumn('user_id', 'varchar(36)', (c) => c.primaryKey().references('users.id'))
+        .addColumn('data', 'text', (c) => c.notNull())
+        .addColumn('updated_at', 'varchar(32)', (c) => c.notNull())
+        .execute();
     },
   },
 };

@@ -259,6 +259,8 @@ A map of short **1–3 minute** lessons that unlock one after another.
 - **Daily puzzle** (a new one every day, the same for everyone)
 - **Badges** that unlock **cosmetic piece skins** and board themes
 
+> **Implementation note (learning path v1):** the shipped path splits "Check ends your turn" into its own unit, giving five units: Chess Basics → The Cards → Check Ends Your Turn → Skip & Reverse → Strategy. Ranked unlocks when the whole path is complete. For now that is a client-side flag; server enforcement comes later. See the README's *Learning path* section.
+
 ---
 
 ## 9. Game Replay and AI Review
