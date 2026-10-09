@@ -215,7 +215,7 @@ export function App() {
           onReview={(src, tab) => { setSetup(null); setReplay({ src, tab, back: 'home' }); }}
         />
       ) : (
-        <Home pieceSet={pieceSet} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => setOnline(true)} onLearn={(t) => setLearn(t)} onReplay={(src, tab) => setReplay({ src, tab, back: 'home' })} />
+        <Home pieceSet={pieceSet} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} onOnline={() => { setOnline(true); window.scrollTo(0, 0); }} onLearn={(t) => setLearn(t)} onReplay={(src, tab) => setReplay({ src, tab, back: 'home' })} />
       )}
       {navActive !== null && <AppNav active={navActive} onNav={navTo} />}
       {auth && <AuthModal mode={auth} onMode={setAuth} onClose={() => setAuth(null)} />}
