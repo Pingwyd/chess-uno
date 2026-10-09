@@ -107,7 +107,9 @@ export function Board({ state, bottomColor, faceTopPieces, topColor, interactive
             </PieceSlot>
           )}
           {moveBadge.has(sq) && (
-            <span className={`move-badge badge-${badgeColor}`} style={{ transform: `rotate(${-angle}deg)` }}>{moveBadge.get(sq)}</span>
+            <span className="badge-layer" style={{ transform: `rotate(${-angle}deg)` }}>
+              <span className={`move-badge badge-${badgeColor}`}>{moveBadge.get(sq)}</span>
+            </span>
           )}
         </div>,
       );

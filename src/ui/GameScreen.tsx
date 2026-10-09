@@ -256,6 +256,8 @@ function PausePanel({ rotated, onResume, onHome }: { rotated: boolean; onResume:
   );
 }
 
+const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
 const REASON: Record<GameResult['reason'], string> = {
   checkmate: 'by checkmate',
   timeout: 'on time',
@@ -281,9 +283,9 @@ function GameOver({ state, result, pass, onRematch, onHome }: { state: GameState
         <h2>{title}</h2>
         <p>{sub}</p>
         <div className="gameover-stats">
-          <span>{turns} turns</span>
-          <span>{state.history.reduce((n, t) => n + t.moves.length, 0)} moves</span>
-          <span>{state.history.reduce((n, t) => n + t.played.length, 0)} cards played</span>
+          <span>{plural(turns, 'turn')}</span>
+          <span>{plural(state.history.reduce((n, t) => n + t.moves.length, 0), 'move')}</span>
+          <span>{plural(state.history.reduce((n, t) => n + t.played.length, 0), 'card')} played</span>
         </div>
         <div className="panel-actions">
           <button className="btn primary" onClick={onRematch}>Rematch</button>
@@ -309,7 +311,7 @@ function MoveLog({ state }: { state: GameState }) {
       <ol ref={ref}>
         {state.history.map((t, i) => (
           <li key={i} className={`log-${t.color}`}>
-            <span className="log-n">{t.turn}.</span>
+            <span className="log-n">{t.skipped ? '' : `${t.turn}.`}</span>
             <span className={`log-dot dot-${t.color}`} />
             <span className="log-who">{state.players[t.player].name}</span>
             <span className="log-txt">{formatTurn(t) || '…'}</span>

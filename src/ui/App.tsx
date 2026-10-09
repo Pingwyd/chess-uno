@@ -14,6 +14,12 @@ const load = <T,>(k: string, d: T): T => {
   }
 };
 
+/** Optional `?seed=123` for reproducible decks (bug reports, demos, screenshots). */
+const urlSeed = (() => {
+  const v = typeof location !== 'undefined' ? new URLSearchParams(location.search).get('seed') : null;
+  return v && /^\d+$/.test(v) ? Number(v) : undefined;
+})();
+
 export function App() {
   const [setup, setSetup] = useState<GameSetup | null>(null);
   const [pieceSet, setPieceSet] = useState<PieceSet>(() => load('cu.pieceSet', 'arcane'));
@@ -34,7 +40,7 @@ export function App() {
           onHome={() => setSetup(null)}
         />
       ) : (
-        <Home pieceSet={pieceSet} sound={sound} onPieceSet={setPieceSet} onSound={setSound} onStart={setSetup} />
+        <Home pieceSet={pieceSet} sound={sound} onPieceSet={setPieceSet} onSound={setSound} onStart={(cfg) => setSetup({ ...cfg, seed: cfg.seed ?? urlSeed })} />
       )}
     </div>
   );
